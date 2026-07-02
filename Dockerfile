@@ -1,14 +1,13 @@
-FROM node:20-alpine AS base
+FROM node:20-slim AS base
 
-RUN apk add --no-cache \
-    python3 py3-pip ffmpeg \
-    chromium nss freetype harfbuzz \
-    ca-certificates ttf-freefont curl bash
+# System deps: ffmpeg (video processing) + python3/pip for yt-dlp. No chromium —
+# the app has no puppeteer/headless-browser code. Debian (glibc) base avoids the
+# Alpine/musl crash during Next.js "Collecting build traces".
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip ffmpeg ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --break-system-packages yt-dlp
-
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+RUN pip3 install --break-system-packages --no-cache-dir yt-dlp
 
 WORKDIR /app
 
@@ -18,6 +17,7 @@ RUN npm ci
 
 FROM base AS builder
 WORKDIR /app
+ENV NODE_OPTIONS=--max-old-space-size=2048
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
@@ -25,7 +25,7 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs nextjs
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
