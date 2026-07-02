@@ -117,8 +117,17 @@ export async function analyzeContent(input: {
 // Remove stray markdown emphasis (*bold*, _italic_, `code`, ~~strike~~) that
 // Gemini sometimes leaves in text — it renders as literal chars on the slides.
 // Keeps '#' so caption hashtags survive.
+// Emoji / pictographs (Gemini sometimes adds them despite instructions).
+const EMOJI_RE =
+  /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{FE00}-\u{FE0F}\u{1F1E6}-\u{1F1FF}\u{200D}\u{20E3}]/gu
+
 function stripMd(v: any): any {
-  if (typeof v === 'string') return v.replace(/\*\*?|__?|`|~~/g, '').replace(/[ \t]{2,}/g, ' ').trim()
+  if (typeof v === 'string')
+    return v
+      .replace(/\*\*?|__?|`|~~/g, '')
+      .replace(EMOJI_RE, '')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim()
   if (Array.isArray(v)) return v.map(stripMd)
   if (v && typeof v === 'object') {
     for (const k of Object.keys(v)) v[k] = stripMd(v[k])
