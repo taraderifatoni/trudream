@@ -1,0 +1,30 @@
+{
+  "name": "ai-carousel",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "14.2.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "@google/generative-ai": "^0.21.0",
+    "openai": "^4.67.0",
+    "uuid": "^10.0.0",
+    "archiver": "^7.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@types/uuid": "^10",
+    "@types/archiver": "^6",
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.0.0",
+    "postcss": "^8.0.0"
+  }
+}

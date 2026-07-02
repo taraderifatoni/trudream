@@ -1,0 +1,14 @@
+node_modules
+.next
+.env
+.env.local
+tmp/
+!tmp/.gitkeep
+*.log
+.DS_Store
+next-env.d.ts
+/out
+/build
+
+# build artifacts
+*.tsbuildinfo
