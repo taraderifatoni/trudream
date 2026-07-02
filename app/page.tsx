@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useMemo, ChangeEvent } from 'react';
+import { useState, useRef, useMemo, useEffect, ChangeEvent } from 'react';
 
 /* ============================ Types ============================ */
 
@@ -34,6 +34,25 @@ interface GenResult {
   videoSlide: VideoSlide | null;
   caption: string;
   tag: string;
+}
+
+interface HistoryEntry {
+  id: string;
+  createdAt: string;
+  kind: 'carousel' | 'reel';
+  caption: string;
+  slideCount: number;
+  hasVideo: boolean;
+  thumbUrl?: string;
+  instagram?: { ok: boolean; id?: string; permalink?: string; error?: string };
+  facebook?: { ok: boolean; id?: string; error?: string };
+  logs: string[];
+}
+
+interface PublishResponse {
+  ok?: boolean;
+  entry?: HistoryEntry;
+  error?: string;
 }
 
 /* ============================ Design tokens ============================ */
@@ -97,6 +116,13 @@ function fileToBase64(file: File): Promise<{ base64: string; mime: string }> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function formatHistoryTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 const MAX_UPLOAD = 500 * 1024 * 1024; // 500MB
@@ -244,7 +270,15 @@ export default function Page() {
   const [publishMode, setPublishMode] = useState<'carousel' | 'reel'>('carousel');
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
+  const [postToFacebook, setPostToFacebook] = useState(false);
   const [toast, setToast] = useState(false);
+  const [toastLink, setToastLink] = useState('');
+  const [toastFb, setToastFb] = useState(false);
+
+  // history
+  const [historyOpen, setHistoryOpen] = useState(true);
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+  const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -429,10 +463,32 @@ export default function Page() {
     }
   }
 
+  /* -------- history -------- */
+  async function fetchHistory() {
+    try {
+      const res = await fetch('/api/history');
+      if (!res.ok) return;
+      const data: { entries?: HistoryEntry[] } = await res.json();
+      setHistoryEntries(Array.isArray(data.entries) ? data.entries : []);
+    } catch {
+      /* ignore history fetch errors */
+    }
+  }
+
+  useEffect(() => {
+    fetchHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function toggleLog(id: string) {
+    setExpandedLogs((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
   /* -------- publish -------- */
   function openPublish() {
     setPublishError('');
     setPublishMode('carousel');
+    setPostToFacebook(false);
     setPublishOpen(true);
   }
 
@@ -441,27 +497,61 @@ export default function Page() {
     setPublishing(true);
     setPublishError('');
     try {
+      // Only image slides go in the slides array; carousel also sends the video
+      // as a separate item via videoUrl, reel builds a slideshow server-side.
+      const imageSlides = result.slides
+        .filter((s) => s.imageUrl)
+        .map((s) => ({ imageUrl: s.imageUrl as string }));
+
+      const body: {
+        mode: 'carousel' | 'reel';
+        slides: { imageUrl: string }[];
+        caption: string;
+        facebook: boolean;
+        videoUrl?: string;
+      } = {
+        mode: publishMode,
+        slides: imageSlides,
+        caption,
+        facebook: postToFacebook,
+      };
+
+      if (publishMode === 'carousel' && result.videoSlide) {
+        body.videoUrl = result.videoSlide.publicUrl;
+      }
+
       const res = await fetch('/api/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: publishMode,
-          slides: result.slides,
-          videoUrl: result.videoSlide ? result.videoSlide.publicUrl : undefined,
-          caption,
-        }),
+        body: JSON.stringify(body),
       });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok || j?.error) {
+      const j: PublishResponse = await res.json().catch(() => ({}));
+
+      // Fatal / bad request (no entry returned)
+      if (!res.ok && !j?.entry) {
         throw new Error(j?.error || `Gagal posting (HTTP ${res.status})`);
       }
+
+      // IG failure but entry returned (502 ok:false)
+      if (j?.ok === false || (!res.ok && j?.entry)) {
+        setPublishError(
+          j?.entry?.instagram?.error || j?.error || 'Gagal posting ke Instagram.',
+        );
+        return;
+      }
+
+      // Success
+      setToastLink(j?.entry?.instagram?.permalink || '');
+      setToastFb(!!j?.entry?.facebook?.ok);
       setPublishOpen(false);
       setToast(true);
-      setTimeout(() => setToast(false), 3000);
+      setTimeout(() => setToast(false), 6000);
     } catch (e) {
       setPublishError(e instanceof Error ? e.message : 'Gagal posting ke Instagram.');
     } finally {
       setPublishing(false);
+      // Always refresh history after an attempt (success or fail).
+      fetchHistory();
     }
   }
 
@@ -919,6 +1009,239 @@ export default function Page() {
               </div>
             </section>
           ) : null}
+
+          {/* ============ Section 5 — Riwayat (history) ============ */}
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
+            <button
+              onClick={() => setHistoryOpen((v) => !v)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                minHeight: 44,
+                padding: '0 12px',
+                background: C.surface,
+                border: `1px solid ${C.border}`,
+                borderRadius: 8,
+                color: C.text,
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: 1,
+                cursor: 'pointer',
+              }}
+            >
+              <span>
+                RIWAYAT{' '}
+                <span style={{ color: C.muted, fontWeight: 400 }}>
+                  ({historyEntries.length})
+                </span>
+              </span>
+              <span style={{ color: C.muted }}>{historyOpen ? '▾' : '▸'}</span>
+            </button>
+
+            {historyOpen ? (
+              historyEntries.length === 0 ? (
+                <div style={{ fontSize: 13, color: C.muted, padding: '4px 2px' }}>
+                  Belum ada riwayat
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {historyEntries.map((entry) => {
+                    const open = !!expandedLogs[entry.id];
+                    return (
+                      <div
+                        key={entry.id}
+                        style={{
+                          background: C.surface,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 10,
+                          padding: 10,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          {/* thumbnail */}
+                          {entry.thumbUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={entry.thumbUrl}
+                              alt="thumb"
+                              style={{
+                                width: 56,
+                                height: 70,
+                                objectFit: 'cover',
+                                borderRadius: 6,
+                                border: `1px solid ${C.border}`,
+                                flex: '0 0 auto',
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: 56,
+                                height: 70,
+                                borderRadius: 6,
+                                background: C.surface2,
+                                border: `1px solid ${C.border}`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 18,
+                                color: C.muted,
+                                flex: '0 0 auto',
+                              }}
+                            >
+                              {entry.hasVideo ? '🎬' : '🖼'}
+                            </div>
+                          )}
+
+                          {/* middle */}
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  letterSpacing: 1,
+                                  textTransform: 'uppercase',
+                                  color: C.accent,
+                                  border: `1px solid ${C.border}`,
+                                  borderRadius: 4,
+                                  padding: '2px 6px',
+                                }}
+                              >
+                                {entry.kind === 'reel' ? 'Reel' : 'Carousel'}
+                              </span>
+                              <span style={{ fontSize: 11, color: C.muted }}>
+                                {formatHistoryTime(entry.createdAt)}
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: C.text,
+                                lineHeight: 1.3,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {entry.caption || '—'}
+                            </div>
+
+                            {/* status chips */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              {entry.instagram?.ok && entry.instagram.permalink ? (
+                                <a
+                                  href={entry.instagram.permalink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    fontSize: 11,
+                                    color: '#7ee2a0',
+                                    border: '1px solid #2f7a45',
+                                    borderRadius: 4,
+                                    padding: '2px 6px',
+                                    textDecoration: 'none',
+                                  }}
+                                >
+                                  ✓ IG
+                                </a>
+                              ) : (
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    color: '#ff7a7a',
+                                    border: '1px solid rgba(255,80,80,0.35)',
+                                    borderRadius: 4,
+                                    padding: '2px 6px',
+                                  }}
+                                >
+                                  {entry.instagram?.ok ? '✓ IG' : '✗ IG'}
+                                </span>
+                              )}
+
+                              {entry.facebook ? (
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    color: entry.facebook.ok ? '#7ee2a0' : '#ff7a7a',
+                                    border: `1px solid ${entry.facebook.ok ? '#2f7a45' : 'rgba(255,80,80,0.35)'}`,
+                                    borderRadius: 4,
+                                    padding: '2px 6px',
+                                  }}
+                                >
+                                  {entry.facebook.ok ? '✓ FB' : '✗ FB'}
+                                </span>
+                              ) : null}
+
+                              <span style={{ fontSize: 11, color: C.muted }}>
+                                {entry.slideCount} slide
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* log toggle */}
+                        {entry.logs && entry.logs.length ? (
+                          <button
+                            onClick={() => toggleLog(entry.id)}
+                            style={{
+                              alignSelf: 'flex-start',
+                              minHeight: 28,
+                              padding: '2px 8px',
+                              background: 'transparent',
+                              border: `1px solid ${C.border}`,
+                              borderRadius: 6,
+                              color: C.muted,
+                              fontSize: 11,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Log {open ? '▴' : '▾'}
+                          </button>
+                        ) : null}
+
+                        {open ? (
+                          <div
+                            style={{
+                              background: C.surface2,
+                              border: `1px solid ${C.border}`,
+                              borderRadius: 6,
+                              padding: 8,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 3,
+                            }}
+                          >
+                            {entry.logs.map((line, i) => (
+                              <div
+                                key={i}
+                                style={{ fontSize: 11, color: C.muted, lineHeight: 1.4, wordBreak: 'break-word' }}
+                              >
+                                {line}
+                              </div>
+                            ))}
+                            {entry.instagram?.error ? (
+                              <div style={{ fontSize: 11, color: '#ff7a7a', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                                IG: {entry.instagram.error}
+                              </div>
+                            ) : null}
+                            {entry.facebook?.error ? (
+                              <div style={{ fontSize: 11, color: '#ff7a7a', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                                FB: {entry.facebook.error}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : null}
+          </section>
         </main>
 
         {/* ============ Preview modal ============ */}
@@ -1039,7 +1362,7 @@ export default function Page() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <label
-                  onClick={() => setPublishMode('carousel')}
+                  onClick={() => (!publishing ? setPublishMode('carousel') : null)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1049,16 +1372,16 @@ export default function Page() {
                     background: publishMode === 'carousel' ? C.surface2 : 'transparent',
                     border: `1px solid ${publishMode === 'carousel' ? C.accent : C.border}`,
                     borderRadius: 8,
-                    cursor: 'pointer',
+                    cursor: publishing ? 'not-allowed' : 'pointer',
                     fontSize: 14,
                   }}
                 >
                   <span style={{ color: C.accent }}>{publishMode === 'carousel' ? '●' : '○'}</span>
-                  Carousel (photo + video)
+                  Carousel {result.videoSlide ? '(gambar + video)' : '(gambar)'}
                 </label>
 
                 <label
-                  onClick={() => (result.videoSlide ? setPublishMode('reel') : null)}
+                  onClick={() => (!publishing ? setPublishMode('reel') : null)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1068,15 +1391,39 @@ export default function Page() {
                     background: publishMode === 'reel' ? C.surface2 : 'transparent',
                     border: `1px solid ${publishMode === 'reel' ? C.accent : C.border}`,
                     borderRadius: 8,
-                    cursor: result.videoSlide ? 'pointer' : 'not-allowed',
-                    opacity: result.videoSlide ? 1 : 0.4,
+                    cursor: publishing ? 'not-allowed' : 'pointer',
                     fontSize: 14,
                   }}
                 >
                   <span style={{ color: C.accent }}>{publishMode === 'reel' ? '●' : '○'}</span>
-                  Single Reel {result.videoSlide ? '' : '(no video)'}
+                  Reel (slideshow gambar)
+                </label>
+
+                <label
+                  onClick={() => (!publishing ? setPostToFacebook((v) => !v) : null)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    minHeight: 44,
+                    padding: '0 12px',
+                    background: postToFacebook ? C.surface2 : 'transparent',
+                    border: `1px solid ${postToFacebook ? C.accent : C.border}`,
+                    borderRadius: 8,
+                    cursor: publishing ? 'not-allowed' : 'pointer',
+                    fontSize: 14,
+                  }}
+                >
+                  <span style={{ color: C.accent }}>{postToFacebook ? '☑' : '☐'}</span>
+                  📘 Posting ke Facebook juga
                 </label>
               </div>
+
+              {publishing && publishMode === 'reel' ? (
+                <div style={{ fontSize: 12, color: C.muted }}>
+                  Mengunggah… (Reel butuh ~1-2 menit)
+                </div>
+              ) : null}
 
               {publishError ? (
                 <div
@@ -1125,7 +1472,13 @@ export default function Page() {
                     cursor: publishing ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {publishing ? 'Posting…' : 'Post Now ▶'}
+                  {publishing ? (
+                    <span>
+                      <span className="spin">⟳</span> Posting…
+                    </span>
+                  ) : (
+                    'Post Now ▶'
+                  )}
                 </button>
               </div>
             </div>
@@ -1140,6 +1493,8 @@ export default function Page() {
               bottom: 20,
               left: '50%',
               transform: 'translateX(-50%)',
+              width: 'calc(100% - 28px)',
+              maxWidth: 452,
               background: '#123d1f',
               border: '1px solid #2f7a45',
               color: '#7ee2a0',
@@ -1147,9 +1502,23 @@ export default function Page() {
               borderRadius: 8,
               fontSize: 14,
               zIndex: 70,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              boxSizing: 'border-box',
             }}
           >
-            ✓ Posted!
+            <span>✓ Posted!{toastFb ? ' · 📘 FB juga' : ''}</span>
+            {toastLink ? (
+              <a
+                href={toastLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#b8f5cf', textDecoration: 'underline', fontSize: 13 }}
+              >
+                Lihat di Instagram ↗
+              </a>
+            ) : null}
           </div>
         ) : null}
       </div>

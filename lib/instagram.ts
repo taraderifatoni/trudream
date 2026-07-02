@@ -2,6 +2,17 @@ const BASE = 'https://graph.facebook.com/v19.0'
 const TOKEN = process.env.META_ACCESS_TOKEN
 const ACCOUNT = process.env.INSTAGRAM_ACCOUNT_ID
 
+// Best-effort permalink lookup for a published media id.
+export async function getPermalink(mediaId: string): Promise<string | undefined> {
+  try {
+    const r = await fetch(`${BASE}/${mediaId}?fields=permalink&access_token=${TOKEN}`)
+    const d = await r.json()
+    return d.permalink
+  } catch {
+    return undefined
+  }
+}
+
 // Poll a media container until IG finishes processing it (needed for video
 // carousel items — images are ready immediately).
 async function waitForContainer(id: string, tries = 30, delayMs = 4000) {
