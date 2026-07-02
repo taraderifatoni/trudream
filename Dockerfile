@@ -34,7 +34,7 @@ COPY --from=builder /app/fonts ./fonts
 # @napi-rs/canvas native binary (+ its platform pkg) is not traced into
 # .next/standalone — bring the whole scope in
 COPY --from=builder /app/node_modules/@napi-rs ./node_modules/@napi-rs
-RUN mkdir -p /app/tmp && chown nextjs:nodejs /app/tmp
+RUN mkdir -p /app/tmp /app/data && chown nextjs:nodejs /app/tmp /app/data
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
