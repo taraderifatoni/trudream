@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { postCarousel, postReel } from '@/lib/instagram'
+import { postToFacebookPage } from '@/lib/facebook'
 
 export const maxDuration = 300
 
@@ -39,7 +40,20 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await postCarousel(items, caption)
-    return NextResponse.json({ ok: true, result })
+
+    // Optionally also post the slide images to the Facebook Page.
+    let facebook: any = null
+    if (body?.facebook) {
+      const imageUrls = slides.filter((s) => s?.imageUrl).map((s) => s.imageUrl as string)
+      try {
+        facebook = await postToFacebookPage(imageUrls, caption)
+      } catch (e: any) {
+        console.error('Facebook post failed:', e)
+        facebook = { error: e.message }
+      }
+    }
+
+    return NextResponse.json({ ok: true, result, facebook })
   } catch (err: any) {
     console.error('Publish error:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
