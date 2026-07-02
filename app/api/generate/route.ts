@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { analyzeContent } from '@/lib/gemini'
 import { generateSlideImage } from '@/lib/openai-image'
-import { renderSlide } from '@/lib/render-slide'
+import { renderSlide, renderVideoOverlay } from '@/lib/render-slide'
 import { downloadVideo, isVideoUrl } from '@/lib/ytdlp'
 import { processVideo } from '@/lib/ffmpeg'
 import path from 'path'
@@ -44,8 +44,10 @@ export async function POST(req: NextRequest) {
       analysis.slides.map(async (slide: any, index: number) => {
         if (!slide.imagePrompt) return slide
         try {
-          // 1) AI background image
-          const bgPath = await generateSlideImage(slide.imagePrompt)
+          // 1) AI background image (cover uses a vivid/high-contrast style)
+          const bgPath = await generateSlideImage(slide.imagePrompt, {
+            vivid: slide.type === 'cover',
+          })
           try {
             // 2) Composite the slide text onto it (@evolving.ai style, 1080x1350)
             const renderedPath = await renderSlide(
@@ -71,7 +73,16 @@ export async function POST(req: NextRequest) {
 
     let videoSlide = null
     if (videoPath && fs.existsSync(videoPath)) {
-      const processedPath = await processVideo(videoPath)
+      // Burn a short caption onto the video slide (in the empty/top area).
+      let overlayPath: string | undefined
+      if (analysis.videoCaption) {
+        try {
+          overlayPath = await renderVideoOverlay(analysis.videoCaption, { handle: HANDLE })
+        } catch (e) {
+          console.error('Video overlay render failed:', e)
+        }
+      }
+      const processedPath = await processVideo(videoPath, overlayPath)
       videoSlide = {
         type: 'video',
         localPath: processedPath,

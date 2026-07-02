@@ -15,6 +15,9 @@ function client(): OpenAI {
 
 const STYLE = `Dark cinematic tech aesthetic. Black background (#0c0c0c). Dramatic single-source lighting. High quality digital art. Sharp details. Moody and atmospheric. No text, no words, no letters, no UI elements.`
 
+// For the cover slide — bright, high-contrast, eye-catching (not dark).
+const STYLE_VIVID = `Vivid, high-contrast, striking hero image. Bold vibrant colors, dramatic yet bright lighting, cinematic, eye-catching, professional, sharp. It should POP and stand out. No text, no words, no letters, no UI elements.`
+
 async function saveImage(item: { url?: string; b64_json?: string }, outputPath: string): Promise<void> {
   if (item.url) {
     const res = await fetch(item.url)
@@ -30,9 +33,12 @@ async function saveImage(item: { url?: string; b64_json?: string }, outputPath: 
   throw new Error('Image response contained neither url nor b64_json')
 }
 
-export async function generateSlideImage(prompt: string): Promise<string> {
+export async function generateSlideImage(
+  prompt: string,
+  opts: { vivid?: boolean } = {},
+): Promise<string> {
   const outputPath = path.join(TMP, `img-${uuid()}.png`)
-  const fullPrompt = `${prompt}\n\n${STYLE}`
+  const fullPrompt = `${prompt}\n\n${opts.vivid ? STYLE_VIVID : STYLE}`
 
   // Primary: gpt-image-1 (may return b64_json instead of url)
   try {

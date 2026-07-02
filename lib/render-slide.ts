@@ -182,7 +182,11 @@ function roundRectPath(
 
 // ─── Background ─────────────────────────────────────────────────────────────
 
-async function drawBackground(ctx: SKRSContext2D, slide: SlideContent) {
+async function drawBackground(
+  ctx: SKRSContext2D,
+  slide: SlideContent,
+  opts: { light?: boolean } = {},
+) {
   let img: Image | null = null
   if (slide.imagePath && fs.existsSync(slide.imagePath)) {
     try {
@@ -203,6 +207,19 @@ async function drawBackground(ctx: SKRSContext2D, slide: SlideContent) {
   } else {
     ctx.fillStyle = COLORS.bg
     ctx.fillRect(0, 0, W, H)
+  }
+
+  // Light mode (cover): keep the image vivid & contrasty — only a bottom
+  // gradient behind the lower-third title, no full-canvas darkening.
+  if (opts.light) {
+    const start = H * 0.48
+    const g = ctx.createLinearGradient(0, start, 0, H)
+    g.addColorStop(0, 'rgba(8,8,10,0)')
+    g.addColorStop(0.55, 'rgba(8,8,10,0.55)')
+    g.addColorStop(1, 'rgba(8,8,10,0.92)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, start, W, H - start)
+    return
   }
 
   // Full-canvas darkening scrim for legibility.
@@ -237,21 +254,16 @@ function drawHeader(_ctx: SKRSContext2D, _tag: string): number {
 
 // ─── Footer ─────────────────────────────────────────────────────────────────
 
-function drawFooter(ctx: SKRSContext2D, handle: string, index: number, total: number) {
+// Footer handle is only drawn on the first slide (per request); page numbers
+// removed. The last (CTA) slide shows "Follow @handle" in its body instead.
+function drawFooter(ctx: SKRSContext2D, handle: string, showHandle: boolean) {
+  if (!showHandle || !handle) return
   const y = H - PAD_BOTTOM + 40
-
-  // Bottom-left handle.
   ctx.font = font(WEIGHT.semibold, 30)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
-  ctx.fillStyle = 'rgba(255,255,255,0.85)'
-  ctx.fillText(handle || '', PAD_X, y)
-
-  // Bottom-right page indicator.
-  ctx.font = font(WEIGHT.medium, 28)
-  ctx.textAlign = 'right'
-  ctx.fillStyle = COLORS.dim
-  ctx.fillText(`${index + 1}/${total}`, W - PAD_X, y)
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'
+  ctx.fillText(handle, PAD_X, y)
 }
 
 // ─── Layout: content area helpers ───────────────────────────────────────────
@@ -583,11 +595,11 @@ function renderCta(
   y = drawLines(ctx, fitted.lines, cx, y, fitted.lineHeight, 'center')
   y += 60
 
-  // Handle (white). "Ikuti untuk update AI harian" sub-line removed per request.
+  // "Follow @handle" (white). This is the last slide's only branding.
   ctx.fillStyle = COLORS.white
   ctx.font = font(WEIGHT.semibold, handleSize)
   ctx.textAlign = 'center'
-  ctx.fillText(handle || '', cx, y + handleSize * 0.85)
+  ctx.fillText(`Follow ${handle || ''}`.trim(), cx, y + handleSize * 0.85)
 }
 
 function renderFallback(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number) {
@@ -619,10 +631,13 @@ export async function renderSlide(
   const canvas = createCanvas(W, H)
   const ctx = canvas.getContext('2d') as unknown as SKRSContext2D
 
-  // 1. Background image + scrims.
-  await drawBackground(ctx, slide)
+  const isFirst = opts.index === 0
+  const isLast = opts.index === opts.total - 1
 
-  // 2. Header tag pill.
+  // 1. Background image + scrims. Cover stays vivid/high-contrast (light scrim).
+  await drawBackground(ctx, slide, { light: slide.type === 'cover' })
+
+  // 2. Header tag pill (removed — no-op).
   const headerBottom = drawHeader(ctx, slide.tag)
 
   // 3. Body per slide type.
@@ -650,12 +665,50 @@ export async function renderSlide(
       break
   }
 
-  // 4. Footer (handle + page indicator).
-  drawFooter(ctx, opts.handle, opts.index, opts.total)
+  // 4. Footer handle — first slide only (last slide brands via CTA body).
+  drawFooter(ctx, opts.handle, isFirst && !isLast)
 
   // 5. Encode and write.
   const outputPath = path.join(TMP, `slide-${uuid()}.png`)
   const png = canvas.toBuffer('image/png')
   fs.writeFileSync(outputPath, png)
+  return outputPath
+}
+
+// Transparent 1080x1350 overlay (short caption at top) to burn onto the video
+// carousel slide with ffmpeg. Text sits over a soft top scrim; the rest is
+// transparent so the video shows through.
+export async function renderVideoOverlay(
+  text: string,
+  opts: { handle?: string } = {},
+): Promise<string> {
+  registerFonts()
+  const canvas = createCanvas(W, H)
+  const ctx = canvas.getContext('2d') as unknown as SKRSContext2D
+
+  // Soft top scrim for legibility (transparent elsewhere).
+  const topEnd = H * 0.36
+  const g = ctx.createLinearGradient(0, 0, 0, topEnd)
+  g.addColorStop(0, 'rgba(8,8,10,0.88)')
+  g.addColorStop(0.7, 'rgba(8,8,10,0.5)')
+  g.addColorStop(1, 'rgba(8,8,10,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, W, topEnd)
+
+  // Caption heading near the top.
+  const fitted = fitText(ctx, text || '', {
+    weight: WEIGHT.bold,
+    startSize: 54,
+    minSize: 34,
+    maxWidth: CONTENT_W,
+    maxHeight: 280,
+    lineHeightRatio: 1.14,
+  })
+  ctx.fillStyle = COLORS.white
+  ctx.font = font(WEIGHT.bold, fitted.size)
+  drawLines(ctx, fitted.lines, PAD_X, PAD_TOP + 6, fitted.lineHeight, 'left')
+
+  const outputPath = path.join(TMP, `voverlay-${uuid()}.png`)
+  fs.writeFileSync(outputPath, canvas.toBuffer('image/png'))
   return outputPath
 }

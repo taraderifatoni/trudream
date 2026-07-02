@@ -5,7 +5,7 @@ import { SlideContent } from './types'
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
-const PROMPT = `Kamu content creator Instagram profesional untuk akun berita/edukasi AI (gaya seperti @evolving.ai: teks tegas & informatif, dark cinematic).
+const PROMPT = `Kamu content creator Instagram profesional untuk akun berita/edukasi AI modern (teks tegas & informatif, visual sinematik).
 Analisis input (video/gambar/teks/link) dan buat data slide carousel.
 
 BAHASA: SEMUA teks yang dibaca manusia (tag, title, subtitle, bullets, stats.label, cards, quote, source, text, caption) WAJIB Bahasa Indonesia yang natural & catchy. HANYA "imagePrompt" yang ditulis dalam Bahasa Inggris (itu buat generator gambar).
@@ -22,7 +22,7 @@ CRITICAL: Jawab HANYA raw JSON. Tanpa markdown, tanpa backtick, tanpa teks sebel
       "tag": "Berita AI",
       "title": "Judul hook maksimal 10 kata (Bahasa Indonesia)",
       "subtitle": "Kalimat pendukung maksimal 15 kata",
-      "imagePrompt": "Dark cinematic scene representing this exact topic. Black background, dramatic lighting, tech aesthetic. NO text, NO words, NO letters, NO UI in image."
+      "imagePrompt": "VIVID, high-contrast, STUNNING hero image of this exact topic. Bright bold colors, striking dramatic lighting, eye-catching, vibrant, cinematic, professional. Make it POP and stand out (NOT dark, NOT muddy). NO text, NO words, NO letters, NO UI in image."
     },
     {
       "type": "bullets",
@@ -62,7 +62,8 @@ CRITICAL: Jawab HANYA raw JSON. Tanpa markdown, tanpa backtick, tanpa teks sebel
       "imagePrompt": "Abstract inspiring dark tech visual. NO text in image."
     }
   ],
-  "caption": "Caption Instagram Bahasa Indonesia. Hook. 3-4 poin inti. CTA. 15-20 hashtag relevan (boleh campur Indonesia/Inggris). Maksimal 200 kata."
+  "videoCaption": "Keterangan ringkas untuk klip video, maksimal 10 kata (Bahasa Indonesia). Kosongkan '' jika input tidak mengandung video.",
+  "caption": "Caption Instagram Bahasa Indonesia. Hook. 3-4 poin inti. CTA. Maksimal 200 kata."
 }
 
 Aturan:
@@ -71,14 +72,19 @@ Aturan:
 - Setiap slide WAJIB punya imagePrompt (dalam Bahasa Inggris)
 - slide "stat" hanya kalau ada angka nyata di input
 - Teks SINGKAT & padat, gaya Indonesia yang enak dibaca
-- imagePrompt harus mencerminkan topik SPESIFIK input, bukan robot/sci-fi generik`
+- imagePrompt harus mencerminkan topik SPESIFIK input, bukan robot/sci-fi generik
+- Slide cover: imagePrompt WAJIB cerah, kontras tinggi, stunning & menonjol (JANGAN gelap/suram)
+CAPTION:
+- TANPA emoji sama sekali
+- Maksimal 5 hashtag, semua HURUF KECIL, ditaruh di akhir
+- JANGAN sebut/menyebut akun lain (mis. evolving.ai) atau sumber gaya apa pun`
 
 export async function analyzeContent(input: {
   text?: string
   videoPath?: string
   imageBase64?: string
   imageMimeType?: string
-}): Promise<{ slides: SlideContent[]; caption: string; tag: string }> {
+}): Promise<{ slides: SlideContent[]; caption: string; tag: string; videoCaption: string }> {
   const parts: any[] = [{ text: PROMPT }]
 
   if (input.videoPath && fs.existsSync(input.videoPath)) {
@@ -104,6 +110,7 @@ export async function analyzeContent(input: {
     slides: stripMd(parsed.slides || []),
     caption: stripMd(parsed.caption || ''),
     tag: stripMd(parsed.tag || 'Berita AI'),
+    videoCaption: stripMd(parsed.videoCaption || ''),
   }
 }
 
