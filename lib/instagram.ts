@@ -37,10 +37,27 @@ export async function postCarousel(items: { type: 'image' | 'video'; url: string
   })).json()
   if (!carousel.id) throw new Error(`Carousel failed: ${JSON.stringify(carousel)}`)
 
-  return (await fetch(`${BASE}/${ACCOUNT}/media_publish`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ creation_id: carousel.id, access_token: TOKEN }),
-  })).json()
+  // The carousel container itself needs to finish processing (esp. with video)
+  // before it can be published. Poll it, then publish with a retry on the
+  // transient "media not ready" (9007) error.
+  await waitForContainer(carousel.id)
+  return publishWithRetry(carousel.id)
+}
+
+async function publishWithRetry(creationId: string, tries = 12, delayMs = 5000) {
+  let last: any = null
+  for (let i = 0; i < tries; i++) {
+    const res = await (await fetch(`${BASE}/${ACCOUNT}/media_publish`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creation_id: creationId, access_token: TOKEN }),
+    })).json()
+    if (res.id) return res
+    last = res
+    // 9007 = media not ready yet; keep waiting. Any other error → fail fast.
+    if (res?.error?.code !== 9007) throw new Error(`Publish failed: ${JSON.stringify(res)}`)
+    await new Promise(r => setTimeout(r, delayMs))
+  }
+  throw new Error(`Publish not ready after retries: ${JSON.stringify(last)}`)
 }
 
 export async function postReel(videoUrl: string, caption: string) {
