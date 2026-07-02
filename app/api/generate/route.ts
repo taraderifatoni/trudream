@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { analyzeContent } from '@/lib/gemini'
 import { generateSlideImage } from '@/lib/openai-image'
+import { renderSlide } from '@/lib/render-slide'
 import { downloadVideo, isVideoUrl } from '@/lib/ytdlp'
 import { processVideo } from '@/lib/ffmpeg'
 import path from 'path'
@@ -10,6 +11,7 @@ export const maxDuration = 300
 
 const TMP = process.env.TMP_DIR || '/tmp'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+const HANDLE = process.env.INSTAGRAM_HANDLE || '@aiera.id'
 
 function toPublicUrl(filePath: string) {
   return `${APP_URL}/api/files/${path.basename(filePath)}`
@@ -37,12 +39,29 @@ export async function POST(req: NextRequest) {
       imageMimeType: body.imageMimeType,
     })
 
+    const total = analysis.slides.length
     const slidesWithImages = await Promise.all(
-      analysis.slides.map(async (slide: any) => {
+      analysis.slides.map(async (slide: any, index: number) => {
         if (!slide.imagePrompt) return slide
         try {
-          const imagePath = await generateSlideImage(slide.imagePrompt)
-          return { ...slide, imagePath, imageUrl: toPublicUrl(imagePath) }
+          // 1) AI background image
+          const bgPath = await generateSlideImage(slide.imagePrompt)
+          try {
+            // 2) Composite the slide text onto it (@evolving.ai style, 1080x1350)
+            const renderedPath = await renderSlide(
+              { ...slide, imagePath: bgPath },
+              { index, total, handle: HANDLE }
+            )
+            return {
+              ...slide,
+              backgroundPath: bgPath,
+              imagePath: renderedPath,
+              imageUrl: toPublicUrl(renderedPath),
+            }
+          } catch (re) {
+            console.error('Slide render failed, using raw background:', re)
+            return { ...slide, imagePath: bgPath, imageUrl: toPublicUrl(bgPath) }
+          }
         } catch (e) {
           console.error('Image gen failed for slide:', e)
           return slide

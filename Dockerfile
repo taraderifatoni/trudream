@@ -29,6 +29,11 @@ RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nod
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+# Fonts for the slide compositor (@napi-rs/canvas registers these at runtime)
+COPY --from=builder /app/fonts ./fonts
+# @napi-rs/canvas native binary (+ its platform pkg) is not traced into
+# .next/standalone — bring the whole scope in
+COPY --from=builder /app/node_modules/@napi-rs ./node_modules/@napi-rs
 RUN mkdir -p /app/tmp && chown nextjs:nodejs /app/tmp
 USER nextjs
 EXPOSE 3000

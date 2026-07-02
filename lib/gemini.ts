@@ -5,68 +5,73 @@ import { SlideContent } from './types'
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
-const PROMPT = `You are an expert Instagram content creator for an AI news account (style: @evolving.ai).
-Analyze the input and generate carousel slide data.
+const PROMPT = `Kamu content creator Instagram profesional untuk akun berita/edukasi AI (gaya seperti @evolving.ai: teks tegas & informatif, dark cinematic).
+Analisis input (video/gambar/teks/link) dan buat data slide carousel.
 
-CRITICAL: Respond ONLY with raw JSON. No markdown, no backticks, nothing before { or after }.
+BAHASA: SEMUA teks yang dibaca manusia (tag, title, subtitle, bullets, stats.label, cards, quote, source, text, caption) WAJIB Bahasa Indonesia yang natural & catchy. HANYA "imagePrompt" yang ditulis dalam Bahasa Inggris (itu buat generator gambar).
+
+AKURASI: Konten HARUS sesuai isi input yang sebenarnya — sebutkan fakta, nama, angka, istilah nyata dari input. JANGAN mengarang/generic.
+
+CRITICAL: Jawab HANYA raw JSON. Tanpa markdown, tanpa backtick, tanpa teks sebelum { atau sesudah }.
 
 {
-  "tag": "AI News",
+  "tag": "Berita AI",
   "slides": [
     {
       "type": "cover",
-      "tag": "AI News",
-      "title": "Hook headline max 10 words",
-      "subtitle": "Supporting line max 15 words",
-      "imagePrompt": "Dark cinematic scene representing this topic. Black background, dramatic lighting, tech aesthetic. NO text, NO words, NO UI in image."
+      "tag": "Berita AI",
+      "title": "Judul hook maksimal 10 kata (Bahasa Indonesia)",
+      "subtitle": "Kalimat pendukung maksimal 15 kata",
+      "imagePrompt": "Dark cinematic scene representing this exact topic. Black background, dramatic lighting, tech aesthetic. NO text, NO words, NO letters, NO UI in image."
     },
     {
       "type": "bullets",
-      "tag": "What happened",
-      "title": "Short title",
-      "bullets": ["Point one", "Point two", "Point three"],
-      "imagePrompt": "Dark cinematic visual. NO text in image."
+      "tag": "Apa yang terjadi",
+      "title": "Judul singkat",
+      "bullets": ["Poin satu", "Poin dua", "Poin tiga"],
+      "imagePrompt": "Dark cinematic visual related to the topic. NO text in image."
     },
     {
       "type": "stat",
-      "tag": "By the numbers",
-      "stats": [{"value": "87%", "label": "description"}],
+      "tag": "Dalam angka",
+      "stats": [{"value": "87%", "label": "keterangan singkat"}],
       "imagePrompt": "Abstract dark tech visual. NO text in image."
     },
     {
       "type": "grid4",
-      "tag": "Why it matters",
+      "tag": "Kenapa penting",
       "cards": [
-        {"num": "01", "title": "Short", "desc": "brief"},
-        {"num": "02", "title": "Short", "desc": "brief"},
-        {"num": "03", "title": "Short", "desc": "brief"},
-        {"num": "04", "title": "Short", "desc": "brief"}
+        {"num": "01", "title": "Singkat", "desc": "penjelasan ringkas"},
+        {"num": "02", "title": "Singkat", "desc": "penjelasan ringkas"},
+        {"num": "03", "title": "Singkat", "desc": "penjelasan ringkas"},
+        {"num": "04", "title": "Singkat", "desc": "penjelasan ringkas"}
       ],
       "imagePrompt": "Dark dramatic visual. NO text in image."
     },
     {
       "type": "quote",
-      "tag": "From the source",
-      "quote": "Actual quote",
-      "source": "— Name, Role",
+      "tag": "Dari sumbernya",
+      "quote": "Kutipan nyata (terjemahkan ke Indonesia bila perlu)",
+      "source": "— Nama, Peran",
       "imagePrompt": "Moody portrait lighting, dark background. NO text in image."
     },
     {
       "type": "cta",
-      "tag": "Follow for daily AI updates",
-      "text": "Punchy closing line",
+      "tag": "Ikuti untuk update AI harian",
+      "text": "Kalimat penutup yang nendang (Bahasa Indonesia)",
       "imagePrompt": "Abstract inspiring dark tech visual. NO text in image."
     }
   ],
-  "caption": "Instagram caption. Hook. 3-4 takeaways. CTA. 15-20 hashtags. Max 200 words."
+  "caption": "Caption Instagram Bahasa Indonesia. Hook. 3-4 poin inti. CTA. 15-20 hashtag relevan (boleh campur Indonesia/Inggris). Maksimal 200 kata."
 }
 
-Rules:
-- 4 to 8 slides depending on content richness
-- Always start with cover, always end with cta
-- Every slide MUST have imagePrompt
-- stat slide only if real numbers exist
-- Keep text SHORT`
+Aturan:
+- 4 sampai 8 slide tergantung kekayaan konten
+- SELALU mulai dengan cover, SELALU akhiri dengan cta
+- Setiap slide WAJIB punya imagePrompt (dalam Bahasa Inggris)
+- slide "stat" hanya kalau ada angka nyata di input
+- Teks SINGKAT & padat, gaya Indonesia yang enak dibaca
+- imagePrompt harus mencerminkan topik SPESIFIK input, bukan robot/sci-fi generik`
 
 export async function analyzeContent(input: {
   text?: string
