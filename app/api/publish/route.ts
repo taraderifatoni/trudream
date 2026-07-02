@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { postCarousel, postReel } from '@/lib/instagram'
 import { postToFacebookPage } from '@/lib/facebook'
+import { buildSlideshow } from '@/lib/ffmpeg'
+import path from 'path'
+import fs from 'fs'
 
 export const maxDuration = 300
+
+const TMP = process.env.TMP_DIR || '/tmp'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+// Resolve a public /api/files URL (or bare filename) to a local TMP path.
+function localFromUrl(u: string): string | null {
+  const base = path.basename(u.split('?')[0])
+  const p = path.join(TMP, base)
+  return fs.existsSync(p) ? p : null
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,12 +28,23 @@ export async function POST(req: NextRequest) {
     }
 
     if (mode === 'reel') {
-      const videoUrl: string | undefined = body?.videoUrl
+      let videoUrl: string | undefined = body?.videoUrl
+
+      // No source video? Build a slideshow Reel from the slide images.
       if (!videoUrl) {
-        return NextResponse.json({ error: 'videoUrl is required for reel mode' }, { status: 400 })
+        const slides: Array<{ imageUrl?: string }> = Array.isArray(body?.slides) ? body.slides : []
+        const imgPaths = slides
+          .map((s) => (s?.imageUrl ? localFromUrl(s.imageUrl) : null))
+          .filter((p): p is string => !!p)
+        if (imgPaths.length === 0) {
+          return NextResponse.json({ error: 'reel needs videoUrl or slide images' }, { status: 400 })
+        }
+        const reelPath = await buildSlideshow(imgPaths, { perSlideSec: body?.perSlideSec ?? 3 })
+        videoUrl = `${APP_URL}/api/files/${path.basename(reelPath)}`
       }
+
       const result = await postReel(videoUrl, caption)
-      return NextResponse.json(result)
+      return NextResponse.json({ ok: true, result, reelUrl: videoUrl })
     }
 
     // carousel
