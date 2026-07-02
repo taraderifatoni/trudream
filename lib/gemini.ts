@@ -100,5 +100,22 @@ export async function analyzeContent(input: {
   raw = raw.substring(f, l + 1)
 
   const parsed = JSON.parse(raw)
-  return { slides: parsed.slides || [], caption: parsed.caption || '', tag: parsed.tag || 'AI News' }
+  return {
+    slides: stripMd(parsed.slides || []),
+    caption: stripMd(parsed.caption || ''),
+    tag: stripMd(parsed.tag || 'Berita AI'),
+  }
+}
+
+// Remove stray markdown emphasis (*bold*, _italic_, `code`, ~~strike~~) that
+// Gemini sometimes leaves in text — it renders as literal chars on the slides.
+// Keeps '#' so caption hashtags survive.
+function stripMd(v: any): any {
+  if (typeof v === 'string') return v.replace(/\*\*?|__?|`|~~/g, '').replace(/[ \t]{2,}/g, ' ').trim()
+  if (Array.isArray(v)) return v.map(stripMd)
+  if (v && typeof v === 'object') {
+    for (const k of Object.keys(v)) v[k] = stripMd(v[k])
+    return v
+  }
+  return v
 }

@@ -23,10 +23,10 @@ const PAD_BOTTOM = 110
 
 const COLORS = {
   bg: '#0a0a0a',
-  accent: '#5a9cf8',
+  accent: '#ffffff', // brand accent removed — everything white per request
   white: '#ffffff',
-  muted: '#c4c4c4',
-  dim: '#8a8a8a',
+  muted: '#e2e2e2',
+  dim: '#cfcfcf',
 }
 
 const FONT = 'Poppins'
@@ -229,41 +229,10 @@ async function drawBackground(ctx: SKRSContext2D, slide: SlideContent) {
 // ─── Header (tag pill) ──────────────────────────────────────────────────────
 
 /** Draws the tag pill at top-left and returns the y where content may begin. */
-function drawHeader(ctx: SKRSContext2D, tag: string): number {
-  const label = String(tag || '').toUpperCase().trim()
-  if (!label) return PAD_TOP
-
-  const size = 30
-  ctx.font = font(WEIGHT.semibold, size)
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
-
-  const barW = 8
-  const gap = 18
-  const textW = ctx.measureText(label).width
-  const padY = 16
-  const padX = 22
-  const boxH = size + padY * 2
-  const boxW = barW + gap + textW + padX * 2
-  const x = PAD_X
-  const y = PAD_TOP
-
-  // Rounded-rect outline.
-  ctx.strokeStyle = 'rgba(90,156,248,0.55)'
-  ctx.lineWidth = 2
-  roundRectPath(ctx, x, y, boxW, boxH, boxH / 2)
-  ctx.stroke()
-
-  // Leading accent bar.
-  ctx.fillStyle = COLORS.accent
-  roundRectPath(ctx, x + padX, y + padY, barW, size, barW / 2)
-  ctx.fill()
-
-  // Label text.
-  ctx.fillStyle = COLORS.accent
-  ctx.fillText(label, x + padX + barW + gap, y + padY + size * 0.8)
-
-  return y + boxH
+// Tag pill removed per request — no header label is drawn. Content starts
+// from the top padding.
+function drawHeader(_ctx: SKRSContext2D, _tag: string): number {
+  return PAD_TOP
 }
 
 // ─── Footer ─────────────────────────────────────────────────────────────────
@@ -587,7 +556,7 @@ function renderCta(
   headerBottom: number,
   handle: string,
 ) {
-  const { top, bottom, height } = contentBounds(headerBottom)
+  const { top, height } = contentBounds(headerBottom)
   const cx = W / 2
 
   const fitted = fitText(ctx, slide.text || '', {
@@ -600,16 +569,12 @@ function renderCta(
   })
 
   const handleSize = 40
-  const subSize = 30
-  const subText = 'Ikuti untuk update AI harian'
 
   ctx.font = font(WEIGHT.semibold, handleSize)
   const handleH = handleSize * 1.3
-  ctx.font = font(WEIGHT.medium, subSize)
-  const subH = subSize * 1.3
 
   const textH = fitted.lines.length * fitted.lineHeight
-  const totalH = textH + 60 + handleH + 24 + subH
+  const totalH = textH + 60 + handleH
   let y = top + Math.max(0, (height - totalH) / 2)
 
   // Main punchy line.
@@ -618,19 +583,11 @@ function renderCta(
   y = drawLines(ctx, fitted.lines, cx, y, fitted.lineHeight, 'center')
   y += 60
 
-  // Handle in accent.
-  ctx.fillStyle = COLORS.accent
+  // Handle (white). "Ikuti untuk update AI harian" sub-line removed per request.
+  ctx.fillStyle = COLORS.white
   ctx.font = font(WEIGHT.semibold, handleSize)
   ctx.textAlign = 'center'
   ctx.fillText(handle || '', cx, y + handleSize * 0.85)
-  y += handleH + 24
-
-  // Sub line (only if it fits).
-  if (y + subH <= bottom) {
-    ctx.fillStyle = COLORS.muted
-    ctx.font = font(WEIGHT.medium, subSize)
-    ctx.fillText(subText, cx, y + subSize * 0.85)
-  }
 }
 
 function renderFallback(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number) {

@@ -24,12 +24,14 @@ export async function POST(req: NextRequest) {
 
     // carousel
     const slides: Array<{ imageUrl?: string }> = Array.isArray(body?.slides) ? body.slides : []
-    const items = slides
+    const items: Array<{ type: 'image' | 'video'; url: string }> = slides
       .filter((s) => s?.imageUrl)
       .map((s) => ({ type: 'image' as const, url: s.imageUrl as string }))
 
     if (body?.videoUrl) {
-      items.push({ type: 'video' as any, url: body.videoUrl })
+      // Insert the video (already 1080x1350) as the 2nd slide when possible.
+      const pos = Math.min(1, items.length)
+      items.splice(pos, 0, { type: 'video', url: body.videoUrl })
     }
 
     if (items.length === 0) {
