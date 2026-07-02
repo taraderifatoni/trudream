@@ -9,7 +9,8 @@ const TMP = process.env.TMP_DIR || '/tmp'
 // key is absent (the OpenAI SDK throws in its constructor).
 let _client: OpenAI | null = null
 function client(): OpenAI {
-  if (!_client) _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  // Bound each request so one slow/stuck image can't hang the whole generate.
+  if (!_client) _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 90_000, maxRetries: 1 })
   return _client
 }
 
@@ -40,12 +41,15 @@ export async function generateSlideImage(
   const outputPath = path.join(TMP, `img-${uuid()}.png`)
   const fullPrompt = `${prompt}\n\n${opts.vivid ? STYLE_VIVID : STYLE}`
 
-  // Primary: gpt-image-1 (may return b64_json instead of url)
+  // Primary: gpt-image-1 (may return b64_json instead of url).
+  // quality 'medium' — these are backgrounds behind text+scrim, so 'high'
+  // (~35s/image) is wasted time & money; 'medium' is much faster and cheaper.
   try {
     const result = await client().images.generate({
       model: 'gpt-image-1',
       prompt: fullPrompt,
       size: '1024x1536',
+      quality: 'medium',
       n: 1,
     })
     const item = result.data?.[0]
@@ -53,12 +57,12 @@ export async function generateSlideImage(
     await saveImage(item, outputPath)
     return outputPath
   } catch (err) {
-    // Fallback: dall-e-3
+    // Fallback: dall-e-3 (standard quality for speed)
     const result = await client().images.generate({
       model: 'dall-e-3',
       prompt: fullPrompt,
       size: '1024x1792',
-      quality: 'hd',
+      quality: 'standard',
       n: 1,
     })
     const item = result.data?.[0]
