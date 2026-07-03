@@ -65,6 +65,29 @@ function ytdlpMeta(url: string): Promise<{ title?: string; description?: string;
   })
 }
 
+// X/Twitter: use the fxtwitter API (no auth) to reliably get a tweet's text +
+// photo, since X blocks unauthenticated scraping and yt-dlp only does video.
+async function fxtwitter(
+  url: string,
+): Promise<{ title?: string; text?: string; imageUrl?: string }> {
+  const m = url.match(/(?:twitter\.com|x\.com)\/([^/]+)\/status\/(\d+)/i)
+  if (!m) return {}
+  try {
+    const res = await fetch(`https://api.fxtwitter.com/${m[1]}/status/${m[2]}`, {
+      headers: { 'User-Agent': UA },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!res.ok) return {}
+    const j: any = await res.json()
+    const t = j?.tweet
+    if (!t) return {}
+    const photo = t.media?.photos?.[0]?.url
+    return { title: t.author?.name, text: t.text, imageUrl: photo }
+  } catch {
+    return {}
+  }
+}
+
 // Fetch a link's main image + text so a pasted URL can become slide material.
 export async function fetchLinkContent(
   url: string,
@@ -73,28 +96,42 @@ export async function fetchLinkContent(
   let imgUrl: string | undefined
   const social = /twitter\.com|x\.com|instagram\.com|tiktok\.com|facebook\.com|fb\.watch/.test(url)
 
+  // X/Twitter first — most reliable path for tweet text + image.
+  if (/twitter\.com|x\.com/i.test(url)) {
+    const fx = await fxtwitter(url)
+    if (fx.title) result.title = fx.title
+    if (fx.text) result.text = fx.text
+    if (fx.imageUrl) imgUrl = fx.imageUrl
+  }
+
   // A) Direct HTML scrape for OpenGraph tags + body text.
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': UA },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(12000),
-    })
-    if (res.ok) {
-      const html = await res.text()
-      result.title = metaTag(html, 'og:title') || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim()
-      const desc = metaTag(html, 'og:description') || metaTag(html, 'description')
-      imgUrl =
-        metaTag(html, 'og:image') ||
-        metaTag(html, 'og:image:url') ||
-        metaTag(html, 'og:image:secure_url') ||
-        metaTag(html, 'twitter:image') ||
-        metaTag(html, 'twitter:image:src')
-      const body = stripTags(html).slice(0, 4000)
-      result.text = [desc, body].filter(Boolean).join('\n').slice(0, 5000)
+  if (!imgUrl || !result.text) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': UA },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(12000),
+      })
+      if (res.ok) {
+        const html = await res.text()
+        if (!result.title)
+          result.title = metaTag(html, 'og:title') || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim()
+        const desc = metaTag(html, 'og:description') || metaTag(html, 'description')
+        if (!imgUrl)
+          imgUrl =
+            metaTag(html, 'og:image') ||
+            metaTag(html, 'og:image:url') ||
+            metaTag(html, 'og:image:secure_url') ||
+            metaTag(html, 'twitter:image') ||
+            metaTag(html, 'twitter:image:src')
+        if (!result.text) {
+          const body = stripTags(html).slice(0, 4000)
+          result.text = [desc, body].filter(Boolean).join('\n').slice(0, 5000)
+        }
+      }
+    } catch {
+      /* ignore */
     }
-  } catch {
-    /* ignore */
   }
 
   // B) Social posts (or when no image/text found): try yt-dlp metadata.

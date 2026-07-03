@@ -45,20 +45,30 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.url) {
+      let gotVideo = false
       if (isVideoUrl(body.url)) {
-        const dl = await downloadVideo(body.url)
-        videoPath = dl.filePath
-        videoDuration = dl.duration
-        extraText = `${extraText}\nVideo title: ${dl.title}`.trim()
-        // Also pull any text from the link (best-effort) for richer analysis.
         try {
-          const l = await fetchLinkContent(body.url)
-          if (l.text) extraText = `${extraText}\n${l.text}`.trim()
+          const dl = await downloadVideo(body.url)
+          videoPath = dl.filePath
+          videoDuration = dl.duration
+          extraText = `${extraText}\nVideo title: ${dl.title}`.trim()
+          gotVideo = true
+          // Also pull any text from the link (best-effort) for richer analysis.
+          try {
+            const l = await fetchLinkContent(body.url)
+            if (l.text) extraText = `${extraText}\n${l.text}`.trim()
+          } catch {
+            /* ignore */
+          }
         } catch (e) {
-          console.error('Link text fetch failed:', e)
+          // No video in this URL (e.g. an image/text tweet) → fall through to
+          // scraping its image + text instead of failing.
+          console.error('Video download failed, falling back to link scrape:', e)
         }
-      } else {
-        // Non-video link → pull the page's main text + image (og:image/thumbnail).
+      }
+
+      if (!gotVideo) {
+        // Non-video link (or video download failed) → pull main text + image.
         try {
           const l = await fetchLinkContent(body.url)
           if (l.title) extraText = `${extraText}\n${l.title}`.trim()
