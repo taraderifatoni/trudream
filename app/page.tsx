@@ -516,7 +516,9 @@ export default function Page() {
         facebook: postToFacebook,
       };
 
-      if (publishMode === 'carousel' && result.videoSlide) {
+      // Send the video for both modes when present: carousel uses it as slide 2,
+      // reel stitches it in (cover -> video with original audio -> rest of slides).
+      if (result.videoSlide) {
         body.videoUrl = result.videoSlide.publicUrl;
       }
 
@@ -1396,7 +1398,7 @@ export default function Page() {
                   }}
                 >
                   <span style={{ color: C.accent }}>{publishMode === 'reel' ? '●' : '○'}</span>
-                  Reel (slideshow gambar)
+                  {result.videoSlide ? 'Reel (cover + video + slide, suara video tetap)' : 'Reel (slideshow gambar)'}
                 </label>
 
                 <label

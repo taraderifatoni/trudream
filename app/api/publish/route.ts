@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { postCarousel, postReel, getPermalink } from '@/lib/instagram'
 import { postToFacebookPage } from '@/lib/facebook'
-import { buildSlideshow } from '@/lib/ffmpeg'
+import { buildSlideshow, buildReel } from '@/lib/ffmpeg'
 import { addHistory, PlatformResult } from '@/lib/history'
 import path from 'path'
 import fs from 'fs'
@@ -45,19 +45,28 @@ export async function POST(req: NextRequest) {
     if (mode === 'reel') {
       log('Mode: Reel')
       let videoUrl: string | undefined = body?.videoUrl
-      if (!videoUrl) {
-        const imgPaths = slides
-          .map((s) => (s?.imageUrl ? localFromUrl(s.imageUrl) : null))
-          .filter((p): p is string => !!p)
-        if (imgPaths.length === 0) {
-          return NextResponse.json({ error: 'reel needs videoUrl or slide images' }, { status: 400 })
-        }
+      const per = body?.perSlideSec ?? 3
+      const imgPaths = slides
+        .map((s) => (s?.imageUrl ? localFromUrl(s.imageUrl) : null))
+        .filter((p): p is string => !!p)
+      const videoLocal = videoUrl ? localFromUrl(videoUrl) : null
+
+      if (videoLocal && imgPaths.length > 0) {
+        // Combined Reel: cover → video (original audio kept) → rest of slides.
+        log(`Menggabungkan cover + video + ${imgPaths.length - 1} slide (suara video dipertahankan)...`)
+        const reelPath = await buildReel(imgPaths[0], videoLocal, imgPaths.slice(1), { perSlideSec: per })
+        videoUrl = `${APP_URL}/api/files/${path.basename(reelPath)}`
+        log('Reel gabungan selesai.')
+      } else if (imgPaths.length > 0) {
+        // No video → silent image slideshow.
         log(`Membuat slideshow dari ${imgPaths.length} slide...`)
-        const reelPath = await buildSlideshow(imgPaths, { perSlideSec: body?.perSlideSec ?? 3 })
+        const reelPath = await buildSlideshow(imgPaths, { perSlideSec: per })
         videoUrl = `${APP_URL}/api/files/${path.basename(reelPath)}`
         log('Slideshow selesai.')
+      } else if (!videoUrl) {
+        return NextResponse.json({ error: 'reel needs a video or slide images' }, { status: 400 })
       } else {
-        log('Pakai video sumber.')
+        log('Pakai video sumber langsung.')
       }
       log('Upload Reel ke Instagram (proses video ~1-2 menit)...')
       try {
