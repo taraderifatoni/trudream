@@ -712,3 +712,74 @@ export async function renderVideoOverlay(
   fs.writeFileSync(outputPath, canvas.toBuffer('image/png'))
   return outputPath
 }
+
+// A slide that embeds the user's uploaded image/screenshot in a rounded frame
+// (fitted whole, not cropped) with a short explanation above it.
+export async function renderScreenshotSlide(
+  imagePath: string,
+  text: string,
+): Promise<string> {
+  registerFonts()
+  const canvas = createCanvas(W, H)
+  const ctx = canvas.getContext('2d') as unknown as SKRSContext2D
+
+  ctx.fillStyle = COLORS.bg
+  ctx.fillRect(0, 0, W, H)
+
+  // Explanation heading at the top.
+  const top = 110
+  let textBottom = top
+  if (text) {
+    const fitted = fitText(ctx, text, {
+      weight: WEIGHT.bold,
+      startSize: 50,
+      minSize: 32,
+      maxWidth: CONTENT_W,
+      maxHeight: 240,
+      lineHeightRatio: 1.14,
+    })
+    ctx.fillStyle = COLORS.white
+    ctx.font = font(WEIGHT.bold, fitted.size)
+    textBottom = drawLines(ctx, fitted.lines, PAD_X, top, fitted.lineHeight, 'left')
+  }
+
+  // Framed screenshot below the text (contained, never cropped).
+  const cardTop = textBottom + 56
+  const cardBottom = H - 110
+  const boxX = PAD_X
+  const boxW = CONTENT_W
+  const boxH = Math.max(200, cardBottom - cardTop)
+
+  try {
+    const img = await loadImage(imagePath)
+    const s = Math.min(boxW / img.width, boxH / img.height)
+    const dw = img.width * s
+    const dh = img.height * s
+    const dx = boxX + (boxW - dw) / 2
+    const dy = cardTop + (boxH - dh) / 2
+
+    // Card backing behind the image.
+    ctx.fillStyle = '#141414'
+    roundRectPath(ctx, dx - 16, dy - 16, dw + 32, dh + 32, 24)
+    ctx.fill()
+
+    // Rounded-clipped image.
+    ctx.save()
+    roundRectPath(ctx, dx, dy, dw, dh, 14)
+    ctx.clip()
+    ctx.drawImage(img, dx, dy, dw, dh)
+    ctx.restore()
+
+    // Subtle border.
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)'
+    ctx.lineWidth = 2
+    roundRectPath(ctx, dx, dy, dw, dh, 14)
+    ctx.stroke()
+  } catch {
+    /* if the upload can't be read, just leave the dark slide with the text */
+  }
+
+  const outputPath = path.join(TMP, `slide-${uuid()}.png`)
+  fs.writeFileSync(outputPath, canvas.toBuffer('image/png'))
+  return outputPath
+}

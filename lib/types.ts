@@ -1,4 +1,4 @@
-export type SlideType = 'cover' | 'bullets' | 'stat' | 'grid4' | 'quote' | 'cta'
+export type SlideType = 'cover' | 'bullets' | 'stat' | 'grid4' | 'quote' | 'cta' | 'screenshot'
 
 export interface SlideContent {
   type: SlideType

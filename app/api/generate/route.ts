@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { analyzeContent } from '@/lib/gemini'
 import { generateSlideImage } from '@/lib/openai-image'
-import { renderSlide, renderVideoOverlay } from '@/lib/render-slide'
+import { renderSlide, renderVideoOverlay, renderScreenshotSlide } from '@/lib/render-slide'
 import { downloadVideo, isVideoUrl } from '@/lib/ytdlp'
 import { processVideo } from '@/lib/ffmpeg'
 import path from 'path'
 import fs from 'fs'
+import { v4 as uuid } from 'uuid'
 
 export const maxDuration = 300
 
@@ -24,6 +25,23 @@ export async function POST(req: NextRequest) {
     let videoPath: string | undefined
     let videoDuration = 0
     let extraText = body.text || ''
+
+    // Save the user's uploaded image/screenshot so it can be embedded in a slide.
+    let uploadedImagePath: string | undefined
+    if (body.imageBase64 && body.imageMimeType) {
+      const ext = String(body.imageMimeType).includes('png')
+        ? 'png'
+        : String(body.imageMimeType).includes('webp')
+          ? 'webp'
+          : 'jpg'
+      const p = path.join(TMP, `upload-${uuid()}.${ext}`)
+      try {
+        fs.writeFileSync(p, Buffer.from(body.imageBase64, 'base64'))
+        uploadedImagePath = p
+      } catch (e) {
+        console.error('Save uploaded image failed:', e)
+      }
+    }
 
     if (body.url && isVideoUrl(body.url)) {
       const dl = await downloadVideo(body.url)
@@ -70,6 +88,24 @@ export async function POST(req: NextRequest) {
         }
       })
     )
+
+    // Embed the user's uploaded screenshot as a framed slide (after the cover).
+    if (uploadedImagePath && fs.existsSync(uploadedImagePath)) {
+      try {
+        const shotPath = await renderScreenshotSlide(
+          uploadedImagePath,
+          analysis.screenshotCaption || '',
+        )
+        slidesWithImages.splice(Math.min(1, slidesWithImages.length), 0, {
+          type: 'screenshot',
+          text: analysis.screenshotCaption || '',
+          imagePath: shotPath,
+          imageUrl: toPublicUrl(shotPath),
+        } as any)
+      } catch (e) {
+        console.error('Screenshot slide render failed:', e)
+      }
+    }
 
     let videoSlide = null
     if (videoPath && fs.existsSync(videoPath)) {

@@ -63,6 +63,7 @@ CRITICAL: Jawab HANYA raw JSON. Tanpa markdown, tanpa backtick, tanpa teks sebel
     }
   ],
   "videoCaption": "Keterangan ringkas untuk klip video, maksimal 10 kata (Bahasa Indonesia). Kosongkan '' jika input tidak mengandung video.",
+  "screenshotCaption": "Penjelasan singkat untuk gambar/screenshot yang diunggah user, maksimal 12 kata (Bahasa Indonesia). Kosongkan '' jika user tidak mengunggah gambar.",
   "caption": "Caption Instagram Bahasa Indonesia. Hook. 3-4 poin inti. CTA. Maksimal 200 kata."
 }
 
@@ -84,7 +85,13 @@ export async function analyzeContent(input: {
   videoPath?: string
   imageBase64?: string
   imageMimeType?: string
-}): Promise<{ slides: SlideContent[]; caption: string; tag: string; videoCaption: string }> {
+}): Promise<{
+  slides: SlideContent[]
+  caption: string
+  tag: string
+  videoCaption: string
+  screenshotCaption: string
+}> {
   const parts: any[] = [{ text: PROMPT }]
 
   if (input.videoPath && fs.existsSync(input.videoPath)) {
@@ -111,6 +118,7 @@ export async function analyzeContent(input: {
     caption: stripMd(parsed.caption || ''),
     tag: stripMd(parsed.tag || 'Berita AI'),
     videoCaption: stripMd(parsed.videoCaption || ''),
+    screenshotCaption: stripMd(parsed.screenshotCaption || ''),
   }
 }
 
