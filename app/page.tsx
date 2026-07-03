@@ -58,13 +58,17 @@ interface PublishResponse {
 /* ============================ Design tokens ============================ */
 
 const C = {
-  bg: '#0a0a0a',
-  surface: '#111111',
-  surface2: '#171717',
-  border: '#222222',
-  accent: '#5a9cf8',
-  text: '#e8e8e8',
-  muted: '#666666',
+  bg: '#f6f7f9',
+  surface: '#ffffff',
+  surface2: '#eef0f3',
+  border: '#e3e6ea',
+  accent: '#2563eb',
+  accentText: '#ffffff',
+  text: '#14161a',
+  muted: '#6b7280',
+  success: '#15803d',
+  error: '#dc2626',
+  shadow: '0 1px 3px rgba(0,0,0,0.06)',
 };
 
 const VIDEO_HOSTS = [
@@ -241,6 +245,78 @@ function SlideContent({ slide }: { slide: Slide }) {
   );
 }
 
+/* ============================ Small UI atoms ============================ */
+
+function Spinner({ size = 16, color = C.accent }: { size?: number; color?: string }) {
+  return (
+    <span
+      className="spin"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        border: `2px solid ${C.border}`,
+        borderTopColor: color,
+        boxSizing: 'border-box',
+      }}
+    />
+  );
+}
+
+function Radio({ selected }: { selected: boolean }) {
+  return (
+    <span
+      style={{
+        width: 18,
+        height: 18,
+        borderRadius: '50%',
+        border: `2px solid ${selected ? C.accent : C.border}`,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: '0 0 auto',
+        boxSizing: 'border-box',
+      }}
+    >
+      {selected ? (
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.accent }} />
+      ) : null}
+    </span>
+  );
+}
+
+function Checkbox({ checked }: { checked: boolean }) {
+  return (
+    <span
+      style={{
+        width: 18,
+        height: 18,
+        borderRadius: 4,
+        border: `2px solid ${checked ? C.accent : C.border}`,
+        background: checked ? C.accent : 'transparent',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: '0 0 auto',
+        boxSizing: 'border-box',
+      }}
+    >
+      {checked ? (
+        <span
+          style={{
+            width: 5,
+            height: 9,
+            borderRight: `2px solid ${C.accentText}`,
+            borderBottom: `2px solid ${C.accentText}`,
+            transform: 'rotate(45deg)',
+            marginTop: -2,
+          }}
+        />
+      ) : null}
+    </span>
+  );
+}
+
 /* ============================ Main Page ============================ */
 
 export default function Page() {
@@ -287,8 +363,8 @@ export default function Page() {
   const inputBadge = useMemo(() => {
     const v = textValue.trim();
     if (!v) return null;
-    if (isVideoPlatformUrl(v)) return { icon: '🎬', label: 'Video platform' };
-    if (isHttpUrl(v)) return { icon: '🔗', label: 'Link artikel' };
+    if (isVideoPlatformUrl(v)) return { label: 'Video platform' };
+    if (isHttpUrl(v)) return { label: 'Link artikel' };
     return null;
   }, [textValue]);
 
@@ -567,15 +643,15 @@ export default function Page() {
         background: C.bg,
         minHeight: '100vh',
         color: C.text,
-        fontFamily: "'Courier New', monospace",
+        fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
       }}
     >
       <style>{`
         @keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
-        .spin { display:inline-block; animation: spin 1s linear infinite; }
-        textarea, input, button { font-family: 'Courier New', monospace; }
+        .spin { display:inline-block; animation: spin 0.7s linear infinite; }
+        textarea, input, button { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
         *::-webkit-scrollbar { height: 6px; width: 6px; }
-        *::-webkit-scrollbar-thumb { background:#222; border-radius: 3px; }
+        *::-webkit-scrollbar-thumb { background:#d3d7dd; border-radius: 3px; }
       `}</style>
 
       <div style={{ maxWidth: 480, margin: '0 auto', minHeight: '100vh', position: 'relative' }}>
@@ -585,7 +661,7 @@ export default function Page() {
             position: 'sticky',
             top: 0,
             zIndex: 20,
-            background: C.bg,
+            background: C.surface,
             borderBottom: `1px solid ${C.border}`,
             display: 'flex',
             alignItems: 'center',
@@ -595,8 +671,16 @@ export default function Page() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: C.accent, fontSize: 12 }}>●</span>
-            <span style={{ fontSize: 13, letterSpacing: 2, fontWeight: 700 }}>AI CAROUSEL</span>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: C.accent,
+                display: 'inline-block',
+              }}
+            />
+            <span style={{ fontSize: 14, letterSpacing: 0.5, fontWeight: 800 }}>AI Carousel</span>
           </div>
           <span
             style={{
@@ -649,9 +733,10 @@ export default function Page() {
                     borderRadius: 4,
                     padding: '4px 8px',
                     display: 'inline-block',
+                    fontWeight: 600,
                   }}
                 >
-                  {inputBadge.icon} {inputBadge.label}
+                  {inputBadge.label}
                 </span>
               </div>
             ) : null}
@@ -662,15 +747,25 @@ export default function Page() {
               style={{
                 minHeight: 44,
                 background: canSubmit ? C.accent : C.surface2,
-                color: canSubmit ? '#06121f' : C.muted,
+                color: canSubmit ? C.accentText : C.muted,
                 border: 'none',
                 borderRadius: 8,
                 fontSize: 15,
                 fontWeight: 700,
                 cursor: canSubmit ? 'pointer' : 'not-allowed',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
               }}
             >
-              {loading ? 'Generating…' : '▶ Go'}
+              {loading ? (
+                <>
+                  <Spinner color={C.muted} /> Generating…
+                </>
+              ) : (
+                'Go'
+              )}
             </button>
 
             {/* upload */}
@@ -686,9 +781,10 @@ export default function Page() {
                 fontSize: 13,
                 cursor: 'pointer',
                 background: C.surface,
+                fontWeight: 600,
               }}
             >
-              📎 Upload gambar / video
+              Upload gambar / video
               <input
                 ref={imageInputRef}
                 type="file"
@@ -758,10 +854,14 @@ export default function Page() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: 20,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: C.muted,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
                   }}
                 >
-                  🎬
+                  Video
                 </div>
                 <div style={{ flex: 1, fontSize: 12, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {videoFile.name}
@@ -787,12 +887,13 @@ export default function Page() {
             {error ? (
               <div
                 style={{
-                  background: 'rgba(255,80,80,0.08)',
-                  border: '1px solid rgba(255,80,80,0.35)',
-                  color: '#ff7a7a',
+                  background: '#fef2f2',
+                  border: `1px solid ${C.error}`,
+                  color: C.error,
                   borderRadius: 8,
                   padding: '10px 12px',
                   fontSize: 13,
+                  fontWeight: 500,
                 }}
               >
                 {error}
@@ -811,6 +912,7 @@ export default function Page() {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 10,
+                boxShadow: C.shadow,
               }}
             >
               <div style={{ fontSize: 12, color: C.muted }}>
@@ -824,12 +926,58 @@ export default function Page() {
                     <span
                       style={{
                         width: 18,
-                        color: state === 'done' ? C.accent : state === 'active' ? C.accent : C.muted,
+                        height: 18,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flex: '0 0 auto',
                       }}
                     >
-                      {state === 'done' ? '✓' : state === 'active' ? <span className="spin">⟳</span> : '○'}
+                      {state === 'done' ? (
+                        <span
+                          style={{
+                            width: 16,
+                            height: 16,
+                            borderRadius: '50%',
+                            background: C.accent,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 4,
+                              height: 8,
+                              borderRight: `2px solid ${C.accentText}`,
+                              borderBottom: `2px solid ${C.accentText}`,
+                              transform: 'rotate(45deg)',
+                              marginTop: -2,
+                            }}
+                          />
+                        </span>
+                      ) : state === 'active' ? (
+                        <Spinner />
+                      ) : (
+                        <span
+                          style={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: '50%',
+                            border: `2px solid ${C.border}`,
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      )}
                     </span>
-                    <span style={{ color: state === 'pending' ? C.muted : C.text }}>{label}</span>
+                    <span
+                      style={{
+                        color: state === 'pending' ? C.muted : C.text,
+                        fontWeight: state === 'active' ? 600 : 400,
+                      }}
+                    >
+                      {label}
+                    </span>
                   </div>
                 );
               })}
@@ -918,14 +1066,23 @@ export default function Page() {
                       justifyContent: 'center',
                     }}
                   >
-                    <span style={{ fontSize: 30, color: C.text }}>▶</span>
+                    <span
+                      style={{
+                        width: 0,
+                        height: 0,
+                        borderTop: '11px solid transparent',
+                        borderBottom: '11px solid transparent',
+                        borderLeft: '18px solid #ffffff',
+                        marginLeft: 4,
+                      }}
+                    />
                     <span
                       style={{
                         position: 'absolute',
                         bottom: 6,
                         left: 8,
                         fontSize: 9,
-                        color: C.muted,
+                        color: '#cbd0d8',
                       }}
                     >
                       {result.videoSlide.durationSeconds}s video
@@ -946,12 +1103,13 @@ export default function Page() {
                       background: C.surface2,
                       border: `1px solid ${C.border}`,
                       borderRadius: 6,
-                      color: copied ? C.accent : C.text,
+                      color: copied ? C.success : C.text,
                       fontSize: 12,
+                      fontWeight: 600,
                       cursor: 'pointer',
                     }}
                   >
-                    {copied ? '✓ Copied!' : '⎘ Copy'}
+                    {copied ? 'Tersalin' : 'Salin'}
                   </button>
                 </div>
                 <textarea
@@ -987,10 +1145,11 @@ export default function Page() {
                     borderRadius: 8,
                     color: C.text,
                     fontSize: 14,
+                    fontWeight: 600,
                     cursor: downloading ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {downloading ? 'Downloading…' : '↓ Download ZIP'}
+                  {downloading ? 'Downloading…' : 'Download ZIP'}
                 </button>
                 <button
                   onClick={openPublish}
@@ -1000,13 +1159,13 @@ export default function Page() {
                     background: C.accent,
                     border: 'none',
                     borderRadius: 8,
-                    color: '#06121f',
+                    color: C.accentText,
                     fontSize: 14,
                     fontWeight: 700,
                     cursor: 'pointer',
                   }}
                 >
-                  ▶ Post to Instagram
+                  Post to Instagram
                 </button>
               </div>
             </section>
@@ -1061,6 +1220,7 @@ export default function Page() {
                           display: 'flex',
                           flexDirection: 'column',
                           gap: 8,
+                          boxShadow: C.shadow,
                         }}
                       >
                         <div style={{ display: 'flex', gap: 10 }}>
@@ -1090,12 +1250,15 @@ export default function Page() {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: 18,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: 0.5,
                                 color: C.muted,
                                 flex: '0 0 auto',
                               }}
                             >
-                              {entry.hasVideo ? '🎬' : '🖼'}
+                              {entry.hasVideo ? 'Video' : 'Gambar'}
                             </div>
                           )}
 
@@ -1141,26 +1304,28 @@ export default function Page() {
                                   rel="noopener noreferrer"
                                   style={{
                                     fontSize: 11,
-                                    color: '#7ee2a0',
-                                    border: '1px solid #2f7a45',
+                                    fontWeight: 600,
+                                    color: C.success,
+                                    border: `1px solid ${C.success}`,
                                     borderRadius: 4,
                                     padding: '2px 6px',
                                     textDecoration: 'none',
                                   }}
                                 >
-                                  ✓ IG
+                                  IG: Berhasil
                                 </a>
                               ) : (
                                 <span
                                   style={{
                                     fontSize: 11,
-                                    color: '#ff7a7a',
-                                    border: '1px solid rgba(255,80,80,0.35)',
+                                    fontWeight: 600,
+                                    color: entry.instagram?.ok ? C.success : C.error,
+                                    border: `1px solid ${entry.instagram?.ok ? C.success : C.error}`,
                                     borderRadius: 4,
                                     padding: '2px 6px',
                                   }}
                                 >
-                                  {entry.instagram?.ok ? '✓ IG' : '✗ IG'}
+                                  {entry.instagram?.ok ? 'IG: Berhasil' : 'IG: Gagal'}
                                 </span>
                               )}
 
@@ -1168,13 +1333,14 @@ export default function Page() {
                                 <span
                                   style={{
                                     fontSize: 11,
-                                    color: entry.facebook.ok ? '#7ee2a0' : '#ff7a7a',
-                                    border: `1px solid ${entry.facebook.ok ? '#2f7a45' : 'rgba(255,80,80,0.35)'}`,
+                                    fontWeight: 600,
+                                    color: entry.facebook.ok ? C.success : C.error,
+                                    border: `1px solid ${entry.facebook.ok ? C.success : C.error}`,
                                     borderRadius: 4,
                                     padding: '2px 6px',
                                   }}
                                 >
-                                  {entry.facebook.ok ? '✓ FB' : '✗ FB'}
+                                  {entry.facebook.ok ? 'FB: Berhasil' : 'FB: Gagal'}
                                 </span>
                               ) : null}
 
@@ -1226,12 +1392,12 @@ export default function Page() {
                               </div>
                             ))}
                             {entry.instagram?.error ? (
-                              <div style={{ fontSize: 11, color: '#ff7a7a', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                              <div style={{ fontSize: 11, color: C.error, lineHeight: 1.4, wordBreak: 'break-word' }}>
                                 IG: {entry.instagram.error}
                               </div>
                             ) : null}
                             {entry.facebook?.error ? (
-                              <div style={{ fontSize: 11, color: '#ff7a7a', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                              <div style={{ fontSize: 11, color: C.error, lineHeight: 1.4, wordBreak: 'break-word' }}>
                                 FB: {entry.facebook.error}
                               </div>
                             ) : null}
@@ -1288,13 +1454,14 @@ export default function Page() {
                   right: 8,
                   minWidth: 44,
                   minHeight: 44,
-                  background: 'rgba(0,0,0,0.5)',
-                  border: 'none',
+                  background: C.surface,
+                  border: `1px solid ${C.border}`,
                   borderRadius: 8,
                   color: C.text,
                   fontSize: 18,
                   cursor: 'pointer',
                   zIndex: 2,
+                  boxShadow: C.shadow,
                 }}
               >
                 ✕
@@ -1378,7 +1545,7 @@ export default function Page() {
                     fontSize: 14,
                   }}
                 >
-                  <span style={{ color: C.accent }}>{publishMode === 'carousel' ? '●' : '○'}</span>
+                  <Radio selected={publishMode === 'carousel'} />
                   Carousel {result.videoSlide ? '(gambar + video)' : '(gambar)'}
                 </label>
 
@@ -1397,7 +1564,7 @@ export default function Page() {
                     fontSize: 14,
                   }}
                 >
-                  <span style={{ color: C.accent }}>{publishMode === 'reel' ? '●' : '○'}</span>
+                  <Radio selected={publishMode === 'reel'} />
                   {result.videoSlide ? 'Reel (cover + video + slide, suara video tetap)' : 'Reel (slideshow gambar)'}
                 </label>
 
@@ -1416,8 +1583,8 @@ export default function Page() {
                     fontSize: 14,
                   }}
                 >
-                  <span style={{ color: C.accent }}>{postToFacebook ? '☑' : '☐'}</span>
-                  📘 Posting ke Facebook juga
+                  <Checkbox checked={postToFacebook} />
+                  Facebook — posting juga
                 </label>
               </div>
 
@@ -1430,12 +1597,13 @@ export default function Page() {
               {publishError ? (
                 <div
                   style={{
-                    background: 'rgba(255,80,80,0.08)',
-                    border: '1px solid rgba(255,80,80,0.35)',
-                    color: '#ff7a7a',
+                    background: '#fef2f2',
+                    border: `1px solid ${C.error}`,
+                    color: C.error,
                     borderRadius: 8,
                     padding: '10px 12px',
                     fontSize: 13,
+                    fontWeight: 500,
                   }}
                 >
                   {publishError}
@@ -1468,18 +1636,22 @@ export default function Page() {
                     background: C.accent,
                     border: 'none',
                     borderRadius: 8,
-                    color: '#06121f',
+                    color: C.accentText,
                     fontSize: 14,
                     fontWeight: 700,
                     cursor: publishing ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
                   }}
                 >
                   {publishing ? (
-                    <span>
-                      <span className="spin">⟳</span> Posting…
-                    </span>
+                    <>
+                      <Spinner color={C.accentText} /> Posting…
+                    </>
                   ) : (
-                    'Post Now ▶'
+                    'Post Now'
                   )}
                 </button>
               </div>
@@ -1497,28 +1669,30 @@ export default function Page() {
               transform: 'translateX(-50%)',
               width: 'calc(100% - 28px)',
               maxWidth: 452,
-              background: '#123d1f',
-              border: '1px solid #2f7a45',
-              color: '#7ee2a0',
-              padding: '10px 18px',
-              borderRadius: 8,
+              background: '#ffffff',
+              border: `1px solid ${C.success}`,
+              color: C.success,
+              padding: '12px 18px',
+              borderRadius: 10,
               fontSize: 14,
+              fontWeight: 600,
               zIndex: 70,
               display: 'flex',
               flexDirection: 'column',
               gap: 6,
               boxSizing: 'border-box',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
             }}
           >
-            <span>✓ Posted!{toastFb ? ' · 📘 FB juga' : ''}</span>
+            <span>Berhasil diposting{toastFb ? ' · FB juga' : ''}</span>
             {toastLink ? (
               <a
                 href={toastLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ color: '#b8f5cf', textDecoration: 'underline', fontSize: 13 }}
+                style={{ color: C.accent, textDecoration: 'underline', fontSize: 13, fontWeight: 500 }}
               >
-                Lihat di Instagram ↗
+                Lihat di Instagram
               </a>
             ) : null}
           </div>
