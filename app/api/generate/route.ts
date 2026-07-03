@@ -3,6 +3,7 @@ import { analyzeContent } from '@/lib/gemini'
 import { generateSlideImage } from '@/lib/openai-image'
 import { renderSlide, renderVideoOverlay, renderScreenshotSlide } from '@/lib/render-slide'
 import { downloadVideo, isVideoUrl } from '@/lib/ytdlp'
+import { fetchLinkContent } from '@/lib/scrape'
 import { processVideo } from '@/lib/ffmpeg'
 import path from 'path'
 import fs from 'fs'
@@ -43,18 +44,51 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (body.url && isVideoUrl(body.url)) {
-      const dl = await downloadVideo(body.url)
-      videoPath = dl.filePath
-      videoDuration = dl.duration
-      extraText = `${extraText}\nVideo title: ${dl.title}`.trim()
+    if (body.url) {
+      if (isVideoUrl(body.url)) {
+        const dl = await downloadVideo(body.url)
+        videoPath = dl.filePath
+        videoDuration = dl.duration
+        extraText = `${extraText}\nVideo title: ${dl.title}`.trim()
+        // Also pull any text from the link (best-effort) for richer analysis.
+        try {
+          const l = await fetchLinkContent(body.url)
+          if (l.text) extraText = `${extraText}\n${l.text}`.trim()
+        } catch (e) {
+          console.error('Link text fetch failed:', e)
+        }
+      } else {
+        // Non-video link → pull the page's main text + image (og:image/thumbnail).
+        try {
+          const l = await fetchLinkContent(body.url)
+          if (l.title) extraText = `${extraText}\n${l.title}`.trim()
+          if (l.text) extraText = `${extraText}\n${l.text}`.trim()
+          if (!uploadedImagePath && l.imagePath) uploadedImagePath = l.imagePath
+        } catch (e) {
+          console.error('Link content fetch failed:', e)
+        }
+      }
+    }
+
+    // Feed the image (user upload OR fetched from the link) to Gemini so it can
+    // reference it and write an accurate screenshot caption.
+    let imageBase64: string | undefined = body.imageBase64
+    let imageMimeType: string | undefined = body.imageMimeType
+    if (!imageBase64 && uploadedImagePath) {
+      try {
+        imageBase64 = fs.readFileSync(uploadedImagePath).toString('base64')
+        const ext = path.extname(uploadedImagePath).toLowerCase()
+        imageMimeType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg'
+      } catch {
+        /* ignore */
+      }
     }
 
     const analysis = await analyzeContent({
       text: extraText || body.url,
       videoPath,
-      imageBase64: body.imageBase64,
-      imageMimeType: body.imageMimeType,
+      imageBase64,
+      imageMimeType,
     })
 
     const total = analysis.slides.length
