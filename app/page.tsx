@@ -2,6 +2,8 @@
 
 import { useState, useRef, useMemo, useEffect, ChangeEvent } from 'react';
 
+export const dynamic = 'force-dynamic';
+
 /* ============================ Types ============================ */
 
 type SlideType = 'cover' | 'bullets' | 'stat' | 'grid4' | 'quote' | 'cta';
