@@ -3,6 +3,7 @@ import { postCarousel, postReel, getPermalink } from '@/lib/instagram'
 import { postToFacebookPage } from '@/lib/facebook'
 import { buildSlideshow, buildReel } from '@/lib/ffmpeg'
 import { addHistory, PlatformResult } from '@/lib/history'
+import { createClient } from '@supabase/supabase-js'
 import path from 'path'
 import fs from 'fs'
 
@@ -30,6 +31,38 @@ export async function POST(req: NextRequest) {
     const mode: 'carousel' | 'reel' = body?.mode
     const caption: string = body?.caption ?? ''
     const wantFacebook = !!body?.facebook
+
+    // Per-user credentials (override env vars when present). Falls back to env
+    // vars if the user has no settings row or is not authenticated.
+    let igOpts: { token?: string; accountId?: string } | undefined
+    let fbOpts: { token?: string; pageId?: string } | undefined
+    try {
+      const sb = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!, { auth: { persistSession: false } })
+      const accessToken = req.cookies.get('sb-access-token')?.value
+      if (accessToken) {
+        const { data: { user } } = await sb.auth.getUser(accessToken)
+        if (user) {
+          const { data: settings } = await sb
+            .from('user_settings')
+            .select('meta_token,ig_account_id,fb_page_id')
+            .eq('user_id', user.id)
+            .maybeSingle()
+          if (settings) {
+            igOpts = {
+              token: settings.meta_token || undefined,
+              accountId: settings.ig_account_id || undefined,
+            }
+            fbOpts = {
+              token: settings.meta_token || undefined,
+              pageId: settings.fb_page_id || undefined,
+            }
+            log('Menggunakan kredensial per-user.')
+          }
+        }
+      }
+    } catch (e: any) {
+      log('Gagal memuat kredensial per-user, pakai env vars: ' + e.message)
+    }
 
     if (mode !== 'carousel' && mode !== 'reel') {
       return NextResponse.json({ error: 'Invalid mode' }, { status: 400 })
@@ -70,7 +103,7 @@ export async function POST(req: NextRequest) {
       }
       log('Upload Reel ke Instagram (proses video ~1-2 menit)...')
       try {
-        const res: any = await postReel(videoUrl, caption)
+        const res: any = await postReel(videoUrl, caption, igOpts)
         if (res?.id) {
           instagram = { ok: true, id: res.id, permalink: await getPermalink(res.id) }
           log('Reel Instagram terbit.')
@@ -97,7 +130,7 @@ export async function POST(req: NextRequest) {
       }
       log(`Upload ${items.length} item ke Instagram...`)
       try {
-        const res: any = await postCarousel(items, caption)
+        const res: any = await postCarousel(items, caption, igOpts)
         if (res?.id) {
           instagram = { ok: true, id: res.id, permalink: await getPermalink(res.id) }
           log('Carousel Instagram terbit.')
@@ -116,7 +149,7 @@ export async function POST(req: NextRequest) {
     if (wantFacebook) {
       log('Posting ke Facebook Page...')
       try {
-        const fb: any = await postToFacebookPage(imageUrls, caption)
+        const fb: any = await postToFacebookPage(imageUrls, caption, fbOpts)
         facebook = { ok: true, id: fb.id }
         log('Post Facebook terbit.')
       } catch (e: any) {
@@ -125,7 +158,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const entry = addHistory({
+    const entry = await addHistory({
       kind: mode,
       caption,
       slideCount: imageUrls.length,
@@ -140,7 +173,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     log('Fatal: ' + err.message)
     try {
-      addHistory({
+      await addHistory({
         kind: 'carousel',
         caption: '',
         slideCount: 0,

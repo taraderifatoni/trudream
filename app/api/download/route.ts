@@ -20,11 +20,26 @@ function resolveInsideTmp(localPath: string): string | null {
   return resolved
 }
 
+// Fetch a remote (Supabase) file as a Buffer when the local copy is gone
+// (e.g. on serverless where /tmp is ephemeral between requests).
+async function fetchBuffer(url?: string): Promise<Buffer | null> {
+  if (!url || !/^https?:\/\//i.test(url)) return null
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(30000) })
+    if (!res.ok) return null
+    return Buffer.from(await res.arrayBuffer())
+  } catch {
+    return null
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const slides: Array<{ imagePath?: string }> = Array.isArray(body?.slides) ? body.slides : []
-    const videoSlide: { localPath?: string } | null = body?.videoSlide ?? null
+    const slides: Array<{ imagePath?: string; imageUrl?: string }> = Array.isArray(body?.slides)
+      ? body.slides
+      : []
+    const videoSlide: { localPath?: string; publicUrl?: string } | null = body?.videoSlide ?? null
 
     const archive = archiver('zip', { zlib: { level: 9 } })
     const chunks: Buffer[] = []
@@ -40,19 +55,18 @@ export async function POST(req: NextRequest) {
 
     let index = 0
     for (const slide of slides) {
-      if (!slide?.imagePath) continue
-      const resolved = resolveInsideTmp(slide.imagePath)
-      if (!resolved) continue
+      const resolved = slide?.imagePath ? resolveInsideTmp(slide.imagePath) : null
+      const buf = resolved ? fs.readFileSync(resolved) : await fetchBuffer(slide?.imageUrl)
+      if (!buf) continue
       index += 1
       const name = `slide-${String(index).padStart(2, '0')}.png`
-      archive.append(fs.createReadStream(resolved), { name })
+      archive.append(buf, { name })
     }
 
-    if (videoSlide?.localPath) {
-      const resolvedVideo = resolveInsideTmp(videoSlide.localPath)
-      if (resolvedVideo) {
-        archive.append(fs.createReadStream(resolvedVideo), { name: 'reel.mp4' })
-      }
+    if (videoSlide) {
+      const resolvedVideo = videoSlide.localPath ? resolveInsideTmp(videoSlide.localPath) : null
+      const vbuf = resolvedVideo ? fs.readFileSync(resolvedVideo) : await fetchBuffer(videoSlide.publicUrl)
+      if (vbuf) archive.append(vbuf, { name: 'reel.mp4' })
     }
 
     await archive.finalize()

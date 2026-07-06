@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { analyzeContent } from '@/lib/gemini'
-import { generateSlideImage } from '@/lib/openai-image'
+import { generateSlideImage } from '@/lib/gemini-image'
 import { renderSlide, renderVideoOverlay, renderScreenshotSlide } from '@/lib/render-slide'
 import { downloadVideo, isVideoUrl } from '@/lib/ytdlp'
 import { fetchLinkContent } from '@/lib/scrape'
 import { processVideo } from '@/lib/ffmpeg'
+import { publishFile } from '@/lib/storage'
 import path from 'path'
 import fs from 'fs'
 import { v4 as uuid } from 'uuid'
@@ -12,12 +13,7 @@ import { v4 as uuid } from 'uuid'
 export const maxDuration = 300
 
 const TMP = process.env.TMP_DIR || '/tmp'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 const HANDLE = process.env.INSTAGRAM_HANDLE || '@aiera.id'
-
-function toPublicUrl(filePath: string) {
-  return `${APP_URL}/api/files/${path.basename(filePath)}`
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -120,11 +116,11 @@ export async function POST(req: NextRequest) {
               ...slide,
               backgroundPath: bgPath,
               imagePath: renderedPath,
-              imageUrl: toPublicUrl(renderedPath),
+              imageUrl: await publishFile(renderedPath),
             }
           } catch (re) {
             console.error('Slide render failed, using raw background:', re)
-            return { ...slide, imagePath: bgPath, imageUrl: toPublicUrl(bgPath) }
+            return { ...slide, imagePath: bgPath, imageUrl: await publishFile(bgPath) }
           }
         } catch (e) {
           console.error('Image gen failed for slide:', e)
@@ -144,7 +140,7 @@ export async function POST(req: NextRequest) {
           type: 'screenshot',
           text: analysis.screenshotCaption || '',
           imagePath: shotPath,
-          imageUrl: toPublicUrl(shotPath),
+          imageUrl: await publishFile(shotPath),
         } as any)
       } catch (e) {
         console.error('Screenshot slide render failed:', e)
@@ -166,7 +162,7 @@ export async function POST(req: NextRequest) {
       videoSlide = {
         type: 'video',
         localPath: processedPath,
-        publicUrl: toPublicUrl(processedPath),
+        publicUrl: await publishFile(processedPath),
         durationSeconds: videoDuration,
       }
     }

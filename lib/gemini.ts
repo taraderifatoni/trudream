@@ -23,20 +23,20 @@ CRITICAL: Jawab HANYA raw JSON. Tanpa markdown, tanpa backtick, tanpa teks sebel
       "tag": "Berita AI",
       "title": "Judul hook maksimal 10 kata (Bahasa Indonesia)",
       "subtitle": "Kalimat pendukung maksimal 15 kata",
-      "imagePrompt": "VIVID, high-contrast, STUNNING hero image of this exact topic. Bright bold colors, striking dramatic lighting, eye-catching, vibrant, cinematic, professional. Make it POP and stand out (NOT dark, NOT muddy). NO text, NO words, NO letters, NO UI in image."
+      "imagePrompt": "VIVID retro arcade / synthwave hero image of this exact topic. Neon lime green and electric blue glow on deep black, 80s arcade cabinet / cyberpunk energy, striking high-contrast glow, eye-catching, bold. Make it POP and stand out. NO text, NO words, NO letters, NO UI in image."
     },
     {
       "type": "bullets",
       "tag": "Apa yang terjadi",
       "title": "Judul singkat",
       "bullets": ["Poin satu", "Poin dua", "Poin tiga"],
-      "imagePrompt": "Dark cinematic visual related to the topic. NO text in image."
+      "imagePrompt": "Retro arcade / synthwave visual related to the topic. Neon lime and electric blue glow on black, 80s arcade energy. NO text in image."
     },
     {
       "type": "stat",
       "tag": "Dalam angka",
       "stats": [{"value": "87%", "label": "keterangan singkat"}],
-      "imagePrompt": "Abstract dark tech visual. NO text in image."
+      "imagePrompt": "Abstract retro arcade visual, neon lime and electric blue glow on black, synthwave grid. NO text in image."
     },
     {
       "type": "grid4",
@@ -47,20 +47,20 @@ CRITICAL: Jawab HANYA raw JSON. Tanpa markdown, tanpa backtick, tanpa teks sebel
         {"num": "03", "title": "Singkat", "desc": "penjelasan ringkas"},
         {"num": "04", "title": "Singkat", "desc": "penjelasan ringkas"}
       ],
-      "imagePrompt": "Dark dramatic visual. NO text in image."
+      "imagePrompt": "Retro arcade dramatic visual, neon lime and electric blue glow on black, 80s cabinet vibe. NO text in image."
     },
     {
       "type": "quote",
       "tag": "Dari sumbernya",
       "quote": "Kutipan nyata (terjemahkan ke Indonesia bila perlu)",
       "source": "— Nama, Peran",
-      "imagePrompt": "Moody portrait lighting, dark background. NO text in image."
+      "imagePrompt": "Moody neon portrait lighting, lime green and electric blue rim light, deep black background, arcade/cyberpunk mood. NO text in image."
     },
     {
       "type": "cta",
       "tag": "Ikuti untuk update AI harian",
       "text": "Kalimat penutup yang nendang (Bahasa Indonesia)",
-      "imagePrompt": "Abstract inspiring dark tech visual. NO text in image."
+      "imagePrompt": "Abstract inspiring retro arcade visual, neon lime and electric blue glow on black, synthwave energy. NO text in image."
     }
   ],
   "videoCaption": "Keterangan ringkas untuk klip video, maksimal 10 kata (Bahasa Indonesia). Kosongkan '' jika input tidak mengandung video.",
@@ -74,8 +74,8 @@ Aturan:
 - Setiap slide WAJIB punya imagePrompt (dalam Bahasa Inggris)
 - slide "stat" hanya kalau ada angka nyata di input
 - Teks SINGKAT & padat, gaya Indonesia yang enak dibaca
-- imagePrompt harus mencerminkan topik SPESIFIK input, bukan robot/sci-fi generik
-- Slide cover: imagePrompt WAJIB cerah, kontras tinggi, stunning & menonjol (JANGAN gelap/suram)
+- imagePrompt harus mencerminkan topik SPESIFIK input, bukan arcade/neon generik
+- Slide cover: imagePrompt WAJIB cerah, neon, kontras tinggi, stunning & menonjol (JANGAN gelap/suram)
 CAPTION:
 - TANPA emoji sama sekali
 - Maksimal 5 hashtag, semua HURUF KECIL, ditaruh di akhir

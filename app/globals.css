@@ -2,18 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-}
+* { box-sizing: border-box; margin: 0; }
 
-html,
-body {
-  background: #f6f7f9;
-  color: #14161a;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+html, body {
+  background: #111118;
+  color: #e8e8ec;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  letter-spacing: -0.01em;
-  line-height: 1.5;
+  letter-spacing: -0.005em;
+  line-height: 1.55;
+}
+
+/* Galaxy arcade: pixel stars + constellation on dark navy */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  opacity: 0.06;
+  background:
+    radial-gradient(1px 1px at 10% 15%, #CDF22B, transparent),
+    radial-gradient(1px 1px at 25% 8%, #CDF22B, transparent),
+    radial-gradient(1px 1px at 40% 20%, #1E45FB, transparent),
+    radial-gradient(1px 1px at 55% 12%, #CDF22B, transparent),
+    radial-gradient(1px 1px at 70% 25%, #1E45FB, transparent),
+    radial-gradient(1px 1px at 85% 10%, #CDF22B, transparent),
+    radial-gradient(1px 1px at 15% 45%, #1E45FB, transparent),
+    radial-gradient(1px 1px at 35% 50%, #CDF22B, transparent),
+    radial-gradient(1px 1px at 60% 40%, #1E45FB, transparent),
+    radial-gradient(1px 1px at 80% 55%, #CDF22B, transparent),
+    radial-gradient(2px 2px at 20% 70%, #1E45FB, transparent),
+    radial-gradient(2px 2px at 50% 80%, #CDF22B, transparent),
+    radial-gradient(2px 2px at 75% 65%, #1E45FB, transparent),
+    radial-gradient(2px 2px at 90% 85%, #CDF22B, transparent),
+    radial-gradient(2px 2px at 5% 90%, #1E45FB, transparent),
+    radial-gradient(circle, rgba(205,242,43,0.12) 1px, transparent 1px);
+  background-size: 200px 200px, 200px 200px, 200px 200px, 200px 200px, 200px 200px, 200px 200px, 200px 200px, 200px 200px, 200px 200px, 200px 200px, 300px 300px, 300px 300px, 300px 300px, 300px 300px, 300px 300px, 24px 24px;
 }

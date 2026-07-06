@@ -14,10 +14,10 @@ function client(): OpenAI {
   return _client
 }
 
-const STYLE = `Dark cinematic tech aesthetic. Black background (#0c0c0c). Dramatic single-source lighting. High quality digital art. Sharp details. Moody and atmospheric. No text, no words, no letters, no UI elements.`
+const STYLE = `Retro arcade / synthwave aesthetic. Pure black background. Neon lime green (#CDF22B) and electric blue (#1E45FB) glowing accents. 80s arcade cabinet vibe, subtle CRT scanlines, pixel-art / vaporwave energy, bold geometric neon shapes, high contrast glow. No text, no words, no letters, no UI elements.`
 
-// For the cover slide — bright, high-contrast, eye-catching (not dark).
-const STYLE_VIVID = `Vivid, high-contrast, striking hero image. Bold vibrant colors, dramatic yet bright lighting, cinematic, eye-catching, professional, sharp. It should POP and stand out. No text, no words, no letters, no UI elements.`
+// For the cover slide — brighter, punchier arcade hero.
+const STYLE_VIVID = `Vivid retro arcade hero image, synthwave/vaporwave energy. Explosive neon lime green (#CDF22B) and electric blue (#1E45FB) glow on deep black, striking high-contrast lighting, glowing edges, 80s arcade cabinet / cyberpunk feel, eye-catching and bold. It should POP and stand out. No text, no words, no letters, no UI elements.`
 
 async function saveImage(item: { url?: string; b64_json?: string }, outputPath: string): Promise<void> {
   if (item.url) {
