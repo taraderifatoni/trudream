@@ -11,11 +11,12 @@ function supabase() {
 // Decode Supabase JWT locally — no network call, never fails due to timeout.
 function getUserId(req: NextRequest): string | null {
   const token = req.cookies.get('sb-access-token')?.value
-  if (!token) return null
+  if (!token) { console.log('[settings] no cookie'); return null }
   try {
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
+    console.log('[settings] user found:', payload.sub)
     return payload.sub ?? null
-  } catch { return null }
+  } catch (e) { console.log('[settings] jwt decode err:', e); return null }
 }
 
 // GET — read user settings

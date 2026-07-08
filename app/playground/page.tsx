@@ -426,6 +426,13 @@ export default function Page() {
     return null;
   }, [textValue]);
 
+  const hasVideo = useMemo(() => {
+    const v = textValue.trim()
+    if (v && VIDEO_HOSTS.some(h => v.toLowerCase().includes(h))) return true
+    if (videoFile) return true
+    return false
+  }, [textValue, videoFile])
+
   const canSubmit = useMemo(() => {
     return (!!textValue.trim() || !!imageFile || !!videoFile) && !loading;
   }, [textValue, imageFile, videoFile, loading]);
@@ -477,8 +484,9 @@ export default function Page() {
   function startProgress() {
     clearTimers();
     setStep(1);
+    const maxSteps = hasVideo ? 4 : 3
     stepTimers.current.push(setTimeout(() => setStep((s) => (s < 2 ? 2 : s)), 2500));
-    stepTimers.current.push(setTimeout(() => setStep((s) => (s < 3 ? 3 : s)), 7000));
+    stepTimers.current.push(setTimeout(() => setStep((s) => (s < maxSteps ? maxSteps : s)), 7000));
   }
 
   function clearTimers() {
@@ -487,38 +495,33 @@ export default function Page() {
   }
 
   /* -------- generate -------- */
+  const [progressLabel, setProgressLabel] = useState('');
+  const [progressPct, setProgressPct] = useState(0);
+  const [progressCurrent, setProgressCurrent] = useState(0);
+  const [progressTotal, setProgressTotal] = useState(0);
+
   async function handleGenerate() {
     if (!canSubmit) return;
     setError('');
     setResult(null);
     setLoading(true);
-    startProgress();
+    setProgressLabel('Starting...');
+    setProgressPct(0);
+    setProgressCurrent(0);
+    setProgressTotal(0);
 
     try {
       const v = textValue.trim();
-      const body: {
-        text?: string;
-        url?: string;
-        imageBase64?: string;
-        imageMimeType?: string;
-      } = {};
+      const body: { text?: string; url?: string; imageBase64?: string; imageMimeType?: string } = {};
 
       const useAsUrl = isVideoPlatformUrl(v);
-
-      // Build text (include uploaded video filename pragmatically)
       let textPayload = useAsUrl ? '' : v;
       if (videoFile) {
         const note = `[uploaded video: ${videoFile.name}]`;
         textPayload = textPayload ? `${textPayload}\n${note}` : note;
       }
-
-      if (useAsUrl) {
-        body.url = v;
-      }
-      if (textPayload) {
-        body.text = textPayload;
-      }
-
+      if (useAsUrl) body.url = v;
+      if (textPayload) body.text = textPayload;
       if (imageFile) {
         const { base64, mime } = await fileToBase64(imageFile);
         body.imageBase64 = base64;
@@ -532,26 +535,50 @@ export default function Page() {
       });
 
       if (!res.ok) {
-        let msg = `Gagal generate (HTTP ${res.status})`;
-        try {
-          const j = await res.json();
-          if (j?.error) msg = j.error;
-        } catch {
-          /* ignore */
-        }
-        throw new Error(msg);
+        const j = await res.json().catch(() => ({}));
+        throw new Error((j as any)?.error || `Gagal generate (HTTP ${res.status})`);
       }
 
-      const data: GenResult = await res.json();
-      clearTimers();
-      setStep(4);
-      setResult(data);
-      setCaption(data.caption || '');
-      // default publish mode
-      setPublishMode('carousel');
+      // Read SSE stream
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.type === 'done') {
+              setResult(data.result);
+              setCaption(data.result.caption || '');
+              setPublishMode('carousel');
+              setProgressLabel('Done');
+              setProgressPct(100);
+            } else if (data.type === 'error') {
+              throw new Error(data.error);
+            } else {
+              setProgressLabel(data.label || data.step || '');
+              setProgressPct(data.pct || 0);
+              setProgressCurrent(data.current || 0);
+              setProgressTotal(data.total || 0);
+              setStep(data.pct ? Math.min(Math.ceil(data.pct / 25), 4) : 1);
+            }
+          } catch (e: any) {
+            if (e.message && !e.message.startsWith('SyntaxError')) throw e;
+          }
+        }
+      }
     } catch (e) {
-      clearTimers();
-      setStep(0);
       setError(e instanceof Error ? e.message : 'Terjadi kesalahan.');
     } finally {
       setLoading(false);
@@ -691,7 +718,7 @@ export default function Page() {
     }
   }
 
-  const steps = ['Analyzing with Gemini', 'Generating images', 'Processing video', 'Done'];
+  const steps = hasVideo ? ['Analyzing with Gemini', 'Generating images', 'Processing video', 'Done'] : ['Analyzing with Gemini', 'Generating images', 'Done'];
 
   /* ============================ Render ============================ */
 
@@ -1037,76 +1064,17 @@ export default function Page() {
                 gap: 12,
               }}
             >
-              <div className="pixel" style={{ fontSize: 9, color: C.lime, marginBottom: 2 }}>
-                PROCESSING — {Math.min(step, 4)}/4
+              <div className="pixel" style={{ fontSize: 9, color: C.lime, marginBottom: 4 }}>
+                {progressLabel || 'Processing...'}
               </div>
-              {steps.map((label, i) => {
-                const idx = i + 1;
-                const state = step > idx ? 'done' : step === idx ? 'active' : 'pending';
-                return (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-                    <span
-                      style={{
-                        width: 20,
-                        height: 20,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flex: '0 0 auto',
-                      }}
-                    >
-                      {state === 'done' ? (
-                        <span
-                          style={{
-                            width: 18,
-                            height: 18,
-                            borderRadius: '50%',
-                            background: C.lime,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: C.black,
-                            fontSize: 11,
-                            fontWeight: 700,
-                          }}
-                        >
-                          ✓
-                        </span>
-                      ) : state === 'active' ? (
-                        <span
-                          className="spin"
-                          style={{
-                            width: 16,
-                            height: 16,
-                            borderRadius: '50%',
-                            border: `2px solid rgba(255,255,255,0.3)`,
-                            borderTopColor: C.lime,
-                            boxSizing: 'border-box',
-                          }}
-                        />
-                      ) : (
-                        <span
-                          style={{
-                            width: 15,
-                            height: 15,
-                            borderRadius: '50%',
-                            border: `2px solid rgba(255,255,255,0.2)`,
-                            boxSizing: 'border-box',
-                          }}
-                        />
-                      )}
-                    </span>
-                    <span
-                      style={{
-                        color: state === 'pending' ? 'rgba(255,255,255,0.5)' : C.white,
-                        fontWeight: state === 'active' ? 600 : 400,
-                      }}
-                    >
-                      {label}
-                    </span>
-                  </div>
-                );
-              })}
+              {/* Progress bar */}
+              <div style={{ height: 8, background: 'rgba(255,255,255,0.12)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${progressPct}%`, background: C.lime, borderRadius: 4, transition: 'width 0.3s ease' }} />
+              </div>
+              <div style={{ fontSize: 11, color: C.white, textAlign: 'right' }}>
+                {progressPct}%
+                {progressTotal > 0 ? ` — ${progressCurrent}/${progressTotal}` : ''}
+              </div>
             </section>
           ) : null}
 

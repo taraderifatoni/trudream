@@ -133,7 +133,7 @@ function SettingsForm() {
             </label>
           </div>
 
-          {msg ? <div style={{fontSize:13,color:msg.startsWith('✓')?B:'#f87171',padding:'8px 12px',background:S,borderRadius:8,border:`1px solid ${B}20`}}>{msg}</div> : null}
+          {msg ? <div style={{fontSize:13,color:msg.startsWith('✓')?L:'#f87171',padding:'8px 12px',background:S,borderRadius:8,border:`1px solid ${L}20`}}>{msg}</div> : null}
 
           <button type="submit" disabled={saving} className="pixel abtn" style={{minHeight:48,background:L,color:'#111118',border:`2px solid ${L}`,borderRadius:12,fontSize:11,cursor:saving?'not-allowed':'pointer',boxShadow:'4px 4px 0 rgba(205,242,43,0.3)',opacity:saving?0.6:1}}>
             {saving ? 'SAVING...' : '▶ SAVE'}
