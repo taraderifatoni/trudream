@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef, useMemo, useEffect, ChangeEvent } from 'react';
-import Link from 'next/link';
+import Link from 'next/link'
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +40,7 @@ interface Slide {
   imagePrompt: string;
   imagePath?: string;
   imageUrl?: string;
+  assetSource?: 'original' | 'generate';
 }
 
 interface VideoSlide {
@@ -53,6 +55,7 @@ interface GenResult {
   videoSlide: VideoSlide | null;
   caption: string;
   tag: string;
+  extractedAssets?: Array<{ type: string; url: string; source: string; caption?: string }>;
 }
 
 interface HistoryEntry {
@@ -96,7 +99,7 @@ const C = {
   error: '#dc2626',
 }
 
-const VIDEO_HOSTS = [
+  const VIDEO_HOSTS = [
   'youtube.com',
   'youtu.be',
   'x.com',
@@ -110,6 +113,13 @@ const VIDEO_HOSTS = [
   'vimeo.com',
   'twitch.tv',
 ];
+
+const RATIOS = [
+  { id: '4:5', label: '4:5', hint: 'IG Carousel' },
+  { id: '1:1', label: '1:1', hint: 'Feed' },
+  { id: '9:16', label: '9:16', hint: 'Story/Reel' },
+  { id: '16:9', label: '16:9', hint: 'YouTube' },
+] as const;
 
 /* ============================ Helpers ============================ */
 
@@ -347,6 +357,7 @@ function Checkbox({ checked }: { checked: boolean }) {
 export default function Page() {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<{email: string} | null>(null);
+  const [brandLogoUrl, setBrandLogoUrl] = useState('');
   useEffect(() => {
     setMounted(true);
     // Handle OAuth callback: Supabase returns tokens in URL hash
@@ -361,9 +372,9 @@ export default function Page() {
         if (rt) document.cookie = `sb-refresh-token=${rt}; expires=${exp}; path=/; SameSite=Lax`
         // Fetch user info from token using Supabase API
         const UA = navigator.userAgent || ''
-        fetch('https://bhrzwrvmcclggdxnubov.supabase.co/auth/v1/user', {
+        fetch(`${SUPABASE_URL}/auth/v1/user`, {
           headers: {
-            'apikey': 'sb_publishable_x7n2-6TC0YTSuv4-Q-5Slg_Zs-adz5c',
+            'apikey': SUPABASE_ANON_KEY,
             'Authorization': `Bearer ${at}`,
           }
         }).then(r => r.json()).then(u => {
@@ -378,6 +389,15 @@ export default function Page() {
     }
     setUser(getUserFromCookie());
   }, []);
+  useEffect(() => { fetch('/api/brand').then(r=>r.json()).then(d=>setBrandLogoUrl(d.logo_url||'')).catch(()=>{}) }, []);
+
+  useEffect(() => {
+    if (!mounted || !user) return
+    fetch('/api/settings', { credentials: 'include' }).then(r => r.json()).then(d => {
+      if (!d.error && !d.brand_voice) setShowBrandModal(true)
+      if (d.brand_voice) setBrandVoice(d.brand_voice)
+    }).catch(() => {})
+  }, [mounted, user])
   // input state
   const [textValue, setTextValue] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -413,6 +433,13 @@ export default function Page() {
   const [historyOpen, setHistoryOpen] = useState(true);
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
+
+  const [showBrandModal, setShowBrandModal] = useState(false);
+  const [brandVoice, setBrandVoice] = useState('');
+  const [brandVoiceSaved, setBrandVoiceSaved] = useState(false);
+
+  const [contentMode, setContentMode] = useState<'full-ai' | 'source-first'>('source-first');
+  const [aspectRatio, setAspectRatio] = useState<'4:5' | '9:16' | '1:1' | '16:9'>('4:5');
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -512,7 +539,7 @@ export default function Page() {
 
     try {
       const v = textValue.trim();
-      const body: { text?: string; url?: string; imageBase64?: string; imageMimeType?: string } = {};
+      const body: { text?: string; url?: string; imageBase64?: string; imageMimeType?: string; contentMode?: string; aspectRatio?: string } = {};
 
       const useAsUrl = isVideoPlatformUrl(v);
       let textPayload = useAsUrl ? '' : v;
@@ -527,6 +554,8 @@ export default function Page() {
         body.imageBase64 = base64;
         body.imageMimeType = mime;
       }
+      body.contentMode = contentMode;
+      body.aspectRatio = aspectRatio;
 
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -548,17 +577,24 @@ export default function Page() {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) { processLines(buffer); break; }
         buffer += decoder.decode(value, { stream: true });
 
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
+        // Process complete SSE messages (delimited by \n\n)
+        let idx: number;
+        while ((idx = buffer.indexOf('\n\n')) !== -1) {
+          const msg = buffer.substring(0, idx);
+          buffer = buffer.substring(idx + 2);
+          processLine(msg);
+        }
+      }
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.type === 'done') {
+      function processLines(remainder: string) { if (remainder) processLine(remainder); }
+      function processLine(msg: string) {
+        if (!msg.startsWith('data: ')) return;
+        try {
+          const data = JSON.parse(msg.slice(6));
+          if (data.type === 'done') {
               setResult(data.result);
               setCaption(data.result.caption || '');
               setPublishMode('carousel');
@@ -577,7 +613,6 @@ export default function Page() {
             if (e.message && !e.message.startsWith('SyntaxError')) throw e;
           }
         }
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Terjadi kesalahan.');
     } finally {
@@ -769,7 +804,7 @@ export default function Page() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span className="blink" style={{ width: 6, height: 6, background: C.lime, display: 'inline-block' }} />
-            <span className="pixel" style={{ fontSize: 10, color: C.lime }}>publisio</span>
+            {brandLogoUrl ? <img src={brandLogoUrl} style={{height:24}} /> : <span className="pixel" style={{ fontSize: 10, color: C.lime }}>publisio</span>}
             <span style={{ fontSize: 9, color: '#666666', marginLeft: 6 }}>
               TOKYO-01
             </span>
@@ -810,11 +845,10 @@ export default function Page() {
               margin: 0,
               wordBreak: 'break-word',
             }}>
-              AI<br />PLAYGROUND
+              PLAYLGROUND
             </h1>
             <p style={{ fontSize: 13, color: C.gray, marginTop: 18, maxWidth: 420, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
-              Generate stunning carousel posts with a single input.
-              Paste a link or type your topic — AI handles the rest.
+              Paste a link or type your topic — we handle the rest.
             </p>
             <div style={{ marginTop: 12 }}>
               <span style={{ fontSize: 10, color: '#666666' }}>● ONLINE</span>
@@ -835,12 +869,80 @@ export default function Page() {
               gap: 14,
             }}
           >
+            {/* Content Mode selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span className="pixel" style={{ fontSize: 8, color: C.lime }}>CONTENT MODE</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => setContentMode('full-ai')}
+                  className="pixel"
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: 20,
+                    fontSize: 9,
+                    border: contentMode === 'full-ai' ? 'none' : `1px solid rgba(255,255,255,0.2)`,
+                    background: contentMode === 'full-ai' ? '#1E45FB' : 'transparent',
+                    color: contentMode === 'full-ai' ? '#FFFFFF' : '#888888',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Full AI
+                </button>
+                <button
+                  onClick={() => setContentMode('source-first')}
+                  className="pixel"
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: 20,
+                    fontSize: 9,
+                    border: contentMode === 'source-first' ? 'none' : `1px solid rgba(255,255,255,0.2)`,
+                    background: contentMode === 'source-first' ? '#1E45FB' : 'transparent',
+                    color: contentMode === 'source-first' ? '#FFFFFF' : '#888888',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Source First
+                </button>
+              </div>
+            </div>
+
+            {/* Aspect Ratio selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span className="pixel" style={{ fontSize: 8, color: C.lime }}>RATIO</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {RATIOS.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => setAspectRatio(r.id)}
+                    className="pixel"
+                    style={{
+                      padding: '6px 16px',
+                      borderRadius: 20,
+                      fontSize: 9,
+                      border: aspectRatio === r.id ? 'none' : `1px solid rgba(255,255,255,0.2)`,
+                      background: aspectRatio === r.id ? '#1E45FB' : 'transparent',
+                      color: aspectRatio === r.id ? '#FFFFFF' : '#888888',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 2,
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    <span>{r.label}</span>
+                    <span style={{ fontSize: 7, opacity: 0.7 }}>{r.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <textarea
               ref={textareaRef}
               value={textValue}
               onChange={handleTextChange}
               rows={4}
-              placeholder="Paste link, teks, atau ketik konten AI di sini..."
+              placeholder="Paste link, teks, atau ketik konten di sini..."
               style={{
                 width: '100%',
                 minHeight: 96,
@@ -1120,6 +1222,11 @@ export default function Page() {
                           : 'transparent',
                       }}
                     />
+                    {result.extractedAssets && result.extractedAssets.length > 0 && (s as any).assetSource ? (
+                      <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 10, zIndex: 2 }}>
+                        {(s as any).assetSource === 'original' ? '🖼' : '🤖'}
+                      </span>
+                    ) : null}
                     <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 6, height: '100%' }}>
                       <span className="pixel" style={{ fontSize: 7, color: C.lime, textTransform: 'uppercase' }}>
                         {s.tag || s.type}
@@ -1845,6 +1952,117 @@ export default function Page() {
                     '▶ POST'
                   )}
                 </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* ============ Brand Voice Onboarding Modal ============ */}
+        {showBrandModal ? (
+          <div
+            onClick={() => setShowBrandModal(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.85)',
+              zIndex: 65,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 16,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: 500,
+                background: '#1a1a26',
+                borderRadius: 14,
+                padding: 28,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
+              }}
+            >
+              <div className="pixel" style={{ fontSize: 14, color: C.lime }}>BRAND VOICE</div>
+              <p style={{ fontSize: 13, color: C.white, lineHeight: 1.6, margin: 0 }}>
+                Tell us about your brand. This will be applied to all your carousels forever.
+              </p>
+
+              <textarea
+                value={brandVoice}
+                onChange={(e) => setBrandVoice(e.target.value)}
+                placeholder="Describe your brand — who are you, what's your tone, what colors do you like, what style feels like you..."
+                style={{
+                  width: '100%',
+                  minHeight: 120,
+                  background: '#111118',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: 10,
+                  color: C.white,
+                  padding: 12,
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                  resize: 'vertical',
+                  outline: 'none',
+                  fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
+                  boxSizing: 'border-box',
+                }}
+              />
+
+              <div style={{ fontSize: 11, color: C.gray, lineHeight: 1.7, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div>Aku brand skincare premium, target wanita 25-35, tone elegant & warm, palette nude/pink/white, font clean minimal, ratio 1:1</div>
+                <div>Saya content creator tech, gaya santai & lucu, target Gen-Z, warna bold & kontras, font modern, ratio 4:5</div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={() => setShowBrandModal(false)}
+                  className="pixel"
+                  style={{
+                    flex: 1,
+                    minHeight: 46,
+                    background: 'transparent',
+                    border: `1px solid ${C.gray}`,
+                    borderRadius: 12,
+                    color: C.gray,
+                    fontSize: 11,
+                    cursor: 'pointer',
+                  }}
+                >
+                  SKIP
+                </button>
+                <button
+                  onClick={async () => {
+                    await fetch('/api/settings', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      credentials: 'include',
+                      body: JSON.stringify({ brand_voice: brandVoice }),
+                    })
+                    setShowBrandModal(false)
+                    setBrandVoiceSaved(true)
+                  }}
+                  className="pixel abtn"
+                  style={{
+                    flex: 1,
+                    minHeight: 46,
+                    background: C.lime,
+                    border: `1px solid ${C.lime}`,
+                    borderRadius: 12,
+                    color: C.black,
+                    fontSize: 11,
+                    cursor: 'pointer',
+                    boxShadow: '4px 4px 0 rgba(205,242,43,0.3)',
+                  }}
+                >
+                  ▶ SAVE
+                </button>
+              </div>
+
+              <div style={{ textAlign: 'center', fontSize: 11, color: C.gray }}>
+                You can edit this anytime in Settings → Brand
               </div>
             </div>
           </div>

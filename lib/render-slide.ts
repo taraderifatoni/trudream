@@ -30,8 +30,19 @@ const COLORS = {
   dim: '#cfcfcf',
 }
 
-const FONT_PIXEL = 'Press Start 2P' // headings / short punchy text
-const FONT_BODY = 'VT323' // long / readable text
+interface SlideDesignCtx {
+  W: number; H: number
+  colors: typeof COLORS
+  headingFont: string
+  bodyFont: string
+  logoUrl?: string
+  logoPosition?: string
+}
+
+const FONT_PIXEL = 'Press Start 2P' // headings / short punchy text (arcade style, kept as default)
+const FONT_BODY = 'VT323' // body (arcade style, kept as default)
+// NOTE: These are FALLBACK defaults. When user has settings in user_settings,
+// generate route overrides with user's heading_font and body_font (e.g. Poppins/Inter)
 const FONT = FONT_BODY
 
 // Font weight keywords selected via ctx.font
@@ -51,16 +62,20 @@ function registerFonts() {
   fontsRegistered = true
 
   const files: [string, string][] = [
-    ['PressStart2P-Regular.ttf', FONT_PIXEL],
-    ['VT323-Regular.ttf', FONT_BODY],
+    // Brand default fonts (Poppins + Inter) — registered first so they take priority
+    ['Poppins-Bold.ttf', 'Poppins'],
+    ['Poppins-SemiBold.ttf', 'Poppins'],
+    ['Poppins-Medium.ttf', 'Poppins'],
+    ['Poppins-Regular.ttf', 'Poppins'],
   ]
 
   for (const [file, family] of files) {
     try {
       const p = path.join(process.cwd(), 'fonts', file)
       if (fs.existsSync(p)) GlobalFonts.registerFromPath(p, family)
-    } catch {
-      // Fall back silently — canvas uses a default face if a file is missing.
+      else console.warn('Font file not found:', file)
+    } catch (e) {
+      console.error('Font registration error:', file, e)
     }
   }
 }
@@ -196,6 +211,7 @@ async function drawBackground(
   ctx: SKRSContext2D,
   slide: SlideContent,
   opts: { light?: boolean } = {},
+  dc: SlideDesignCtx,
 ) {
   let img: Image | null = null
   if (slide.imagePath && fs.existsSync(slide.imagePath)) {
@@ -208,50 +224,81 @@ async function drawBackground(
 
   if (img) {
     // Cover: scale to fill, center-crop.
-    const scale = Math.max(W / img.width, H / img.height)
+    const scale = Math.max(dc.W / img.width, dc.H / img.height)
     const dw = img.width * scale
     const dh = img.height * scale
-    const dx = (W - dw) / 2
-    const dy = (H - dh) / 2
+    const dx = (dc.W - dw) / 2
+    const dy = (dc.H - dh) / 2
     ctx.drawImage(img, dx, dy, dw, dh)
 
     // Light mode (cover): keep the image vivid & contrasty — only a bottom
     // gradient behind the lower-third title, no full-canvas darkening.
     if (opts.light) {
-      const start = H * 0.48
-      const g = ctx.createLinearGradient(0, start, 0, H)
+      const start = dc.H * 0.48
+      const g = ctx.createLinearGradient(0, start, 0, dc.H)
       g.addColorStop(0, 'rgba(8,8,10,0)')
       g.addColorStop(0.55, 'rgba(8,8,10,0.55)')
       g.addColorStop(1, 'rgba(8,8,10,0.92)')
       ctx.fillStyle = g
-      ctx.fillRect(0, start, W, H - start)
+      ctx.fillRect(0, start, dc.W, dc.H - start)
     } else {
       // Full-canvas darkening scrim for legibility (only on real images).
       ctx.fillStyle = 'rgba(10,10,10,0.55)'
-      ctx.fillRect(0, 0, W, H)
+      ctx.fillRect(0, 0, dc.W, dc.H)
 
       // Stronger bottom gradient (bottom 45%).
-      const bottomStart = H * 0.55
-      const bottomGrad = ctx.createLinearGradient(0, bottomStart, 0, H)
+      const bottomStart = dc.H * 0.55
+      const bottomGrad = ctx.createLinearGradient(0, bottomStart, 0, dc.H)
       bottomGrad.addColorStop(0, 'rgba(10,10,10,0)')
       bottomGrad.addColorStop(1, 'rgba(10,10,10,0.92)')
       ctx.fillStyle = bottomGrad
-      ctx.fillRect(0, bottomStart, W, H - bottomStart)
+      ctx.fillRect(0, bottomStart, dc.W, dc.H - bottomStart)
 
       // Subtle top gradient (top 25%).
-      const topEnd = H * 0.25
+      const topEnd = dc.H * 0.25
       const topGrad = ctx.createLinearGradient(0, 0, 0, topEnd)
       topGrad.addColorStop(0, 'rgba(10,10,10,0.6)')
       topGrad.addColorStop(1, 'rgba(10,10,10,0)')
       ctx.fillStyle = topGrad
-      ctx.fillRect(0, 0, W, topEnd)
+      ctx.fillRect(0, 0, dc.W, topEnd)
     }
     return
   }
 
   // No image — bright blue arcade backdrop (dominant colour, no scrim).
-  ctx.fillStyle = COLORS.bg
-  ctx.fillRect(0, 0, W, H)
+  ctx.fillStyle = dc.colors.bg
+  ctx.fillRect(0, 0, dc.W, dc.H)
+}
+
+/** Draw a semi-transparent rounded backdrop behind text for readability */
+function drawTextBackdrop(
+  ctx: SKRSContext2D,
+  x: number, y: number, w: number, h: number,
+  dc: SlideDesignCtx,
+) {
+  const pad = 28
+  const r = 16
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
+  const rx = x - pad, ry = y - pad, rw = w + pad * 2, rh = h + pad * 2
+  const radius = Math.min(r, rw / 2, rh / 2)
+  ctx.beginPath()
+  ctx.moveTo(rx + radius, ry)
+  ctx.arcTo(rx + rw, ry, rx + rw, ry + rh, radius)
+  ctx.arcTo(rx + rw, ry + rh, rx, ry + rh, radius)
+  ctx.arcTo(rx, ry + rh, rx, ry, radius)
+  ctx.arcTo(rx, ry, rx + rw, ry, radius)
+  ctx.closePath()
+  ctx.fill()
+}
+
+function drawTextBackdropForLines(
+  ctx: SKRSContext2D,
+  lines: string[], x: number, yTop: number, lineHeight: number, maxWidth: number,
+  dc: SlideDesignCtx,
+  extraPad?: number,
+) {
+  const totalH = lines.length * lineHeight + (extraPad || 0)
+  drawTextBackdrop(ctx, x, yTop, maxWidth, totalH, dc)
 }
 
 // ─── Header (tag pill) ──────────────────────────────────────────────────────
@@ -263,17 +310,58 @@ function drawHeader(_ctx: SKRSContext2D, _tag: string): number {
   return PAD_TOP
 }
 
+// ─── Logo ───────────────────────────────────────────────────────────────────
+
+async function drawLogo(ctx2d: SKRSContext2D, dc: SlideDesignCtx) {
+  if (!dc.logoUrl || !dc.logoPosition || dc.logoPosition === 'none') return
+  let img: Image | null = null
+  try {
+    img = await loadImage(dc.logoUrl)
+  } catch { return }
+  if (!img) return
+
+  const maxDim = 80
+  let logoW = img.width
+  let logoH = img.height
+  if (logoW > logoH && logoW > maxDim) {
+    logoH = (logoH / logoW) * maxDim
+    logoW = maxDim
+  } else if (logoH > maxDim) {
+    logoW = (logoW / logoH) * maxDim
+    logoH = maxDim
+  }
+
+  const pad = 40
+  let x = 0, y = 0
+  switch (dc.logoPosition) {
+    case 'top-left':       x = pad; y = pad; break
+    case 'top-center':     x = (dc.W - logoW) / 2; y = pad; break
+    case 'top-right':      x = dc.W - logoW - pad; y = pad; break
+    case 'center-left':    x = pad; y = (dc.H - logoH) / 2; break
+    case 'center':         x = (dc.W - logoW) / 2; y = (dc.H - logoH) / 2; break
+    case 'center-right':   x = dc.W - logoW - pad; y = (dc.H - logoH) / 2; break
+    case 'bottom-left':    x = pad; y = dc.H - logoH - pad; break
+    case 'bottom-center':  x = (dc.W - logoW) / 2; y = dc.H - logoH - pad; break
+    case 'bottom-right':   x = dc.W - logoW - pad; y = dc.H - logoH - pad; break
+    default: return
+  }
+
+  ctx2d.globalAlpha = 0.8
+  ctx2d.drawImage(img, x, y, logoW, logoH)
+  ctx2d.globalAlpha = 1
+}
+
 // ─── Footer ─────────────────────────────────────────────────────────────────
 
 // Footer handle is only drawn on the first slide (per request); page numbers
 // removed. The last (CTA) slide shows "Follow @handle" in its body instead.
-function drawFooter(ctx: SKRSContext2D, handle: string, showHandle: boolean) {
+function drawFooter(ctx: SKRSContext2D, handle: string, showHandle: boolean, dc: SlideDesignCtx) {
   if (!showHandle || !handle) return
-  const y = H - PAD_BOTTOM + 40
-  ctx.font = font(WEIGHT.semibold, 18, FONT_PIXEL)
+  const y = dc.H - PAD_BOTTOM + 40
+  ctx.font = font(WEIGHT.semibold, 18, dc.headingFont)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
-  ctx.fillStyle = COLORS.accent
+  ctx.fillStyle = dc.colors.accent
   ctx.fillText(handle, PAD_X, y)
 }
 
@@ -282,21 +370,21 @@ function drawFooter(ctx: SKRSContext2D, handle: string, showHandle: boolean) {
 const CONTENT_W = W - PAD_X * 2
 
 // Vertical band available for body content (below header, above footer).
-function contentBounds(headerBottom: number) {
+function contentBounds(headerBottom: number, dc: SlideDesignCtx) {
   const top = headerBottom + 60
-  const bottom = H - PAD_BOTTOM - 30
+  const bottom = dc.H - PAD_BOTTOM - 30
   return { top, bottom, height: bottom - top }
 }
 
 // ─── Per-type renderers ─────────────────────────────────────────────────────
 
-function renderCover(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number) {
-  const { bottom } = contentBounds(headerBottom)
+function renderCover(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number, dc: SlideDesignCtx) {
+  const { bottom } = contentBounds(headerBottom, dc)
 
   // Subtitle first (measured to reserve room below the title block).
   let subtitleBlock: { lines: string[]; size: number; lineHeight: number } | null = null
   if (slide.subtitle) {
-    ctx.font = font(WEIGHT.medium, 48)
+    ctx.font = font(WEIGHT.medium, 48, dc.bodyFont)
     const lines = wrapText(ctx, slide.subtitle, CONTENT_W)
     subtitleBlock = { lines, size: 48, lineHeight: 48 * 1.15 }
   }
@@ -315,26 +403,29 @@ function renderCover(ctx: SKRSContext2D, slide: SlideContent, headerBottom: numb
     maxWidth: CONTENT_W,
     maxHeight: Math.max(titleMaxH, 120),
     lineHeightRatio: 1.32,
-    family: FONT_PIXEL,
+    family: dc.headingFont,
   })
 
   const totalBlockH = fitted.lines.length * fitted.lineHeight + subtitleH
   // Anchor block to the lower third: place its bottom near `bottom`.
   const blockTop = Math.max(headerBottom + 60, bottom - totalBlockH)
 
-  ctx.fillStyle = COLORS.accent
-  ctx.font = font(WEIGHT.bold, fitted.size, FONT_PIXEL)
+  // Text backdrop for readability
+  drawTextBackdropForLines(ctx, fitted.lines, PAD_X, blockTop, fitted.lineHeight, CONTENT_W, dc, subtitleH + 30)
+
+  ctx.fillStyle = dc.colors.accent
+  ctx.font = font(WEIGHT.bold, fitted.size, dc.headingFont)
   const afterTitle = drawLines(ctx, fitted.lines, PAD_X, blockTop, fitted.lineHeight, 'left')
 
   if (subtitleBlock) {
-    ctx.fillStyle = COLORS.white
-    ctx.font = font(WEIGHT.medium, subtitleBlock.size)
+    ctx.fillStyle = dc.colors.white
+    ctx.font = font(WEIGHT.medium, subtitleBlock.size, dc.bodyFont)
     drawLines(ctx, subtitleBlock.lines, PAD_X, afterTitle + 34, subtitleBlock.lineHeight, 'left')
   }
 }
 
-function renderBullets(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number) {
-  const { top, bottom } = contentBounds(headerBottom)
+function renderBullets(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number, dc: SlideDesignCtx) {
+  const { top, bottom } = contentBounds(headerBottom, dc)
 
   // Title at top.
   let y = top
@@ -346,10 +437,10 @@ function renderBullets(ctx: SKRSContext2D, slide: SlideContent, headerBottom: nu
       maxWidth: CONTENT_W,
       maxHeight: 300,
       lineHeightRatio: 1.3,
-      family: FONT_PIXEL,
+      family: dc.headingFont,
     })
-    ctx.fillStyle = COLORS.accent
-    ctx.font = font(WEIGHT.bold, fitted.size, FONT_PIXEL)
+    ctx.fillStyle = dc.colors.accent
+    ctx.font = font(WEIGHT.bold, fitted.size, dc.headingFont)
     y = drawLines(ctx, fitted.lines, PAD_X, y, fitted.lineHeight, 'left') + 56
   }
 
@@ -363,7 +454,7 @@ function renderBullets(ctx: SKRSContext2D, slide: SlideContent, headerBottom: nu
   // Choose a bullet font size that lets everything fit.
   let bulletSize = 50
   const measure = (size: number) => {
-    ctx.font = font(WEIGHT.medium, size)
+    ctx.font = font(WEIGHT.medium, size, dc.bodyFont)
     const lh = size * 1.15
     let total = 0
     for (const b of bullets) {
@@ -381,18 +472,18 @@ function renderBullets(ctx: SKRSContext2D, slide: SlideContent, headerBottom: nu
   ctx.textBaseline = 'alphabetic'
 
   for (const b of bullets) {
-    ctx.font = font(WEIGHT.medium, bulletSize)
+    ctx.font = font(WEIGHT.medium, bulletSize, dc.bodyFont)
     const lines = wrapText(ctx, b, textMaxW)
     const rowTop = y
 
     // Accent bullet mark — a neon square block (arcade pixel style).
-    ctx.fillStyle = COLORS.accent
+    ctx.fillStyle = dc.colors.accent
     const dotR = Math.max(6, bulletSize * 0.16)
     ctx.fillRect(markX, rowTop + lineHeight * 0.5 - dotR, dotR * 2, dotR * 2)
 
     // Bullet text (white, hanging indent).
-    ctx.fillStyle = COLORS.white
-    ctx.font = font(WEIGHT.medium, bulletSize)
+    ctx.fillStyle = dc.colors.white
+    ctx.font = font(WEIGHT.medium, bulletSize, dc.bodyFont)
     drawLines(ctx, lines, textX, rowTop, lineHeight, 'left')
 
     y = rowTop + lines.length * lineHeight + bulletSize * 0.7
@@ -400,12 +491,12 @@ function renderBullets(ctx: SKRSContext2D, slide: SlideContent, headerBottom: nu
   }
 }
 
-function renderStat(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number) {
-  const { top, bottom, height } = contentBounds(headerBottom)
+function renderStat(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number, dc: SlideDesignCtx) {
+  const { top, bottom, height } = contentBounds(headerBottom, dc)
   const stats = slide.stats || []
   if (stats.length === 0) return
 
-  const cx = W / 2
+  const cx = dc.W / 2
   const valueSize = stats.length > 2 ? 72 : 96
   const labelSize = 52
   const blockGap = 56
@@ -413,7 +504,7 @@ function renderStat(ctx: SKRSContext2D, slide: SlideContent, headerBottom: numbe
   // Pre-measure to center vertically.
   ctx.textAlign = 'center'
   const blocks = stats.map((s) => {
-    ctx.font = font(WEIGHT.medium, labelSize)
+    ctx.font = font(WEIGHT.medium, labelSize, dc.bodyFont)
     const labelLines = wrapText(ctx, s.label, CONTENT_W)
     const h = valueSize * 1.25 + 22 + labelLines.length * labelSize * 1.15
     return { s, labelLines, h }
@@ -423,15 +514,15 @@ function renderStat(ctx: SKRSContext2D, slide: SlideContent, headerBottom: numbe
 
   for (const block of blocks) {
     // Value — huge pixel accent.
-    ctx.fillStyle = COLORS.accent
-    ctx.font = font(WEIGHT.bold, valueSize, FONT_PIXEL)
+    ctx.fillStyle = dc.colors.accent
+    ctx.font = font(WEIGHT.bold, valueSize, dc.headingFont)
     ctx.textBaseline = 'alphabetic'
     ctx.fillText(block.s.value, cx, y + valueSize * 0.9)
     y += valueSize * 1.25 + 22
 
     // Label — white body.
-    ctx.fillStyle = COLORS.white
-    ctx.font = font(WEIGHT.medium, labelSize)
+    ctx.fillStyle = dc.colors.white
+    ctx.font = font(WEIGHT.medium, labelSize, dc.bodyFont)
     y = drawLines(ctx, block.labelLines, cx, y, labelSize * 1.15, 'center')
     y += blockGap
 
@@ -439,8 +530,8 @@ function renderStat(ctx: SKRSContext2D, slide: SlideContent, headerBottom: numbe
   }
 }
 
-function renderGrid4(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number) {
-  const { top, bottom } = contentBounds(headerBottom)
+function renderGrid4(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number, dc: SlideDesignCtx) {
+  const { top, bottom } = contentBounds(headerBottom, dc)
 
   let y = top
   if (slide.title) {
@@ -451,10 +542,10 @@ function renderGrid4(ctx: SKRSContext2D, slide: SlideContent, headerBottom: numb
       maxWidth: CONTENT_W,
       maxHeight: 220,
       lineHeightRatio: 1.3,
-      family: FONT_PIXEL,
+      family: dc.headingFont,
     })
-    ctx.fillStyle = COLORS.accent
-    ctx.font = font(WEIGHT.bold, fitted.size, FONT_PIXEL)
+    ctx.fillStyle = dc.colors.accent
+    ctx.font = font(WEIGHT.bold, fitted.size, dc.headingFont)
     y = drawLines(ctx, fitted.lines, PAD_X, y, fitted.lineHeight, 'left') + 50
   }
 
@@ -496,37 +587,37 @@ function renderGrid4(ctx: SKRSContext2D, slide: SlideContent, headerBottom: numb
     let cy = cellY
 
     // Number — pixel accent.
-    ctx.fillStyle = COLORS.accent
-    ctx.font = font(WEIGHT.bold, 26, FONT_PIXEL)
+    ctx.fillStyle = dc.colors.accent
+    ctx.font = font(WEIGHT.bold, 26, dc.headingFont)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
     ctx.fillText(card.num || '', cellX, cy + 26)
     cy += 26 + 22
 
     // Title — body.
-    ctx.fillStyle = COLORS.white
-    ctx.font = font(WEIGHT.semibold, 40)
+    ctx.fillStyle = dc.colors.white
+    ctx.font = font(WEIGHT.semibold, 40, dc.bodyFont)
     const titleLines = wrapText(ctx, card.title || '', innerW).slice(0, 2)
     cy = drawLines(ctx, titleLines, cellX, cy, 40 * 1.12, 'left') + 10
 
     // Description — body.
-    ctx.fillStyle = COLORS.muted
-    ctx.font = font(WEIGHT.regular, 32)
+    ctx.fillStyle = dc.colors.muted
+    ctx.font = font(WEIGHT.regular, 32, dc.bodyFont)
     const descMaxLines = Math.max(1, Math.floor((cellY + cellH - cy) / (32 * 1.15)))
     const descLines = wrapText(ctx, card.desc || '', innerW).slice(0, descMaxLines)
     drawLines(ctx, descLines, cellX, cy, 32 * 1.15, 'left')
   })
 }
 
-function renderQuote(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number) {
-  const { top, bottom, height } = contentBounds(headerBottom)
-  const cx = W / 2
+function renderQuote(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number, dc: SlideDesignCtx) {
+  const { top, bottom, height } = contentBounds(headerBottom, dc)
+  const cx = dc.W / 2
   const maxW = CONTENT_W - 40
 
   // Big leading quote glyph.
   const glyphSize = 200
-  ctx.fillStyle = COLORS.accent
-  ctx.font = font(WEIGHT.bold, glyphSize)
+  ctx.fillStyle = dc.colors.accent
+  ctx.font = font(WEIGHT.bold, glyphSize, dc.bodyFont)
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
 
@@ -538,11 +629,12 @@ function renderQuote(ctx: SKRSContext2D, slide: SlideContent, headerBottom: numb
     maxWidth: maxW,
     maxHeight: height - 260,
     lineHeightRatio: 1.2,
+    family: dc.bodyFont,
   })
 
   let sourceLines: string[] = []
   if (slide.source) {
-    ctx.font = font(WEIGHT.medium, 44)
+    ctx.font = font(WEIGHT.medium, 44, dc.bodyFont)
     sourceLines = wrapText(ctx, slide.source, maxW)
   }
 
@@ -553,21 +645,21 @@ function renderQuote(ctx: SKRSContext2D, slide: SlideContent, headerBottom: numb
   let y = top + Math.max(0, (height - totalH) / 2)
 
   // Glyph.
-  ctx.fillStyle = COLORS.accent
-  ctx.font = font(WEIGHT.bold, glyphSize)
-  ctx.fillText('“', cx, y + glyphSize * 0.72)
+  ctx.fillStyle = dc.colors.accent
+  ctx.font = font(WEIGHT.bold, glyphSize, dc.bodyFont)
+  ctx.fillText('\u201C', cx, y + glyphSize * 0.72)
   y += glyphH + 20
 
   // Quote.
-  ctx.fillStyle = COLORS.white
-  ctx.font = font(WEIGHT.semibold, fitted.size)
+  ctx.fillStyle = dc.colors.white
+  ctx.font = font(WEIGHT.semibold, fitted.size, dc.bodyFont)
   y = drawLines(ctx, fitted.lines, cx, y, fitted.lineHeight, 'center')
 
   // Source.
   if (sourceLines.length) {
     y += 44
-    ctx.fillStyle = COLORS.accent
-    ctx.font = font(WEIGHT.medium, 44)
+    ctx.fillStyle = dc.colors.accent
+    ctx.font = font(WEIGHT.medium, 44, dc.bodyFont)
     drawLines(ctx, sourceLines, cx, y, 44 * 1.2, 'center')
   }
 
@@ -579,9 +671,10 @@ function renderCta(
   slide: SlideContent,
   headerBottom: number,
   handle: string,
+  dc: SlideDesignCtx,
 ) {
-  const { top, height } = contentBounds(headerBottom)
-  const cx = W / 2
+  const { top, height } = contentBounds(headerBottom, dc)
+  const cx = dc.W / 2
 
   const fitted = fitText(ctx, slide.text || '', {
     weight: WEIGHT.bold,
@@ -590,12 +683,12 @@ function renderCta(
     maxWidth: CONTENT_W,
     maxHeight: height - 200,
     lineHeightRatio: 1.3,
-    family: FONT_PIXEL,
+    family: dc.headingFont,
   })
 
   const handleSize = 26
 
-  ctx.font = font(WEIGHT.semibold, handleSize, FONT_PIXEL)
+  ctx.font = font(WEIGHT.semibold, handleSize, dc.headingFont)
   const handleH = handleSize * 1.3
 
   const textH = fitted.lines.length * fitted.lineHeight
@@ -603,20 +696,20 @@ function renderCta(
   let y = top + Math.max(0, (height - totalH) / 2)
 
   // Main punchy line — pixel accent.
-  ctx.fillStyle = COLORS.accent
-  ctx.font = font(WEIGHT.bold, fitted.size, FONT_PIXEL)
+  ctx.fillStyle = dc.colors.accent
+  ctx.font = font(WEIGHT.bold, fitted.size, dc.headingFont)
   y = drawLines(ctx, fitted.lines, cx, y, fitted.lineHeight, 'center')
   y += 60
 
   // "Follow @handle" — the last slide's only branding.
-  ctx.fillStyle = COLORS.white
-  ctx.font = font(WEIGHT.semibold, handleSize, FONT_PIXEL)
+  ctx.fillStyle = dc.colors.white
+  ctx.font = font(WEIGHT.semibold, handleSize, dc.headingFont)
   ctx.textAlign = 'center'
   ctx.fillText(`Follow ${handle || ''}`.trim(), cx, y + handleSize * 0.85)
 }
 
-function renderFallback(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number) {
-  const { top, height } = contentBounds(headerBottom)
+function renderFallback(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number, dc: SlideDesignCtx) {
+  const { top, height } = contentBounds(headerBottom, dc)
   const text = slide.title || slide.text || slide.tag || ''
   const fitted = fitText(ctx, text, {
     weight: WEIGHT.bold,
@@ -625,62 +718,91 @@ function renderFallback(ctx: SKRSContext2D, slide: SlideContent, headerBottom: n
     maxWidth: CONTENT_W,
     maxHeight: height,
     lineHeightRatio: 1.3,
-    family: FONT_PIXEL,
+    family: dc.headingFont,
   })
   const blockH = fitted.lines.length * fitted.lineHeight
   const y = top + Math.max(0, (height - blockH) / 2)
-  ctx.fillStyle = COLORS.accent
-  ctx.font = font(WEIGHT.bold, fitted.size, FONT_PIXEL)
-  drawLines(ctx, fitted.lines, W / 2, y, fitted.lineHeight, 'center')
+  ctx.fillStyle = dc.colors.accent
+  ctx.font = font(WEIGHT.bold, fitted.size, dc.headingFont)
+  drawLines(ctx, fitted.lines, dc.W / 2, y, fitted.lineHeight, 'center')
 }
 
 // ─── Public entrypoint ──────────────────────────────────────────────────────
 
 export async function renderSlide(
   slide: SlideContent,
-  opts: { index: number; total: number; handle: string },
+  opts: {
+    index: number; total: number; handle: string
+    design?: {
+      headingFont?: string; bodyFont?: string
+      bgColor?: string; accentColor?: string; accent2Color?: string
+      textColor?: string; mutedColor?: string
+      width?: number; height?: number
+      logoUrl?: string; logoPosition?: string
+    }
+  },
 ): Promise<string> {
   registerFonts()
 
-  const canvas = createCanvas(W, H)
-  const ctx = canvas.getContext('2d') as unknown as SKRSContext2D
+  const dW = opts.design?.width ?? W
+  const dH = opts.design?.height ?? H
+  const dColors = { ...COLORS }
+  if (opts.design?.bgColor) dColors.bg = opts.design.bgColor
+  if (opts.design?.accentColor) dColors.accent = opts.design.accentColor
+  if (opts.design?.accent2Color) dColors.accent2 = opts.design.accent2Color
+  if (opts.design?.textColor) dColors.white = opts.design.textColor
+  if (opts.design?.mutedColor) dColors.muted = opts.design.mutedColor
+  if ((slide as any).palette) {
+    const p = (slide as any).palette
+    if (p.primary) dColors.accent = p.primary
+    if (p.accent) dColors.accent2 = p.accent
+  }
+  const dHeadingFont = opts.design?.headingFont || FONT_PIXEL
+  const dBodyFont = opts.design?.bodyFont || FONT_BODY
+  const ctx: SlideDesignCtx = { W: dW, H: dH, colors: dColors, headingFont: dHeadingFont, bodyFont: dBodyFont, logoUrl: opts.design?.logoUrl, logoPosition: opts.design?.logoPosition }
+
+  const canvas = createCanvas(dW, dH)
+  const ctx2d = canvas.getContext('2d') as unknown as SKRSContext2D
 
   const isFirst = opts.index === 0
   const isLast = opts.index === opts.total - 1
 
   // 1. Background image + scrims. Cover stays vivid/high-contrast (light scrim).
-  await drawBackground(ctx, slide, { light: slide.type === 'cover' })
+  await drawBackground(ctx2d, slide, { light: slide.type === 'cover' }, ctx)
 
   // 2. Header tag pill (removed — no-op).
-  const headerBottom = drawHeader(ctx, slide.tag)
+  const headerBottom = drawHeader(ctx2d, slide.tag)
 
   // 3. Body per slide type.
   switch (slide.type) {
     case 'cover':
-      renderCover(ctx, slide, headerBottom)
+      renderCover(ctx2d, slide, headerBottom, ctx)
       break
     case 'bullets':
-      renderBullets(ctx, slide, headerBottom)
+      renderBullets(ctx2d, slide, headerBottom, ctx)
       break
     case 'stat':
-      renderStat(ctx, slide, headerBottom)
+      renderStat(ctx2d, slide, headerBottom, ctx)
       break
     case 'grid4':
-      renderGrid4(ctx, slide, headerBottom)
+      renderGrid4(ctx2d, slide, headerBottom, ctx)
       break
     case 'quote':
-      renderQuote(ctx, slide, headerBottom)
+      renderQuote(ctx2d, slide, headerBottom, ctx)
       break
     case 'cta':
-      renderCta(ctx, slide, headerBottom, opts.handle)
+      renderCta(ctx2d, slide, headerBottom, opts.handle, ctx)
       break
     default:
-      renderFallback(ctx, slide, headerBottom)
+      renderFallback(ctx2d, slide, headerBottom, ctx)
       break
   }
 
+  // 3.5 Logo watermark (above body, semi-transparent).
+  await drawLogo(ctx2d, ctx)
+
   // 4. Footer handle — first slide only (last slide brands via CTA body).
-  drawFooter(ctx, opts.handle, isFirst && !isLast)
+  drawFooter(ctx2d, opts.handle, isFirst && !isLast, ctx)
 
   // 5. Encode and write.
   const outputPath = path.join(TMP, `slide-${uuid()}.png`)

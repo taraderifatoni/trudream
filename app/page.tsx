@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 const L = '#CDF22B'
@@ -10,6 +11,9 @@ const D = '#111118'
 const S = '#1a1a26'
 
 export default function LandingPage() {
+  const [brandLogoUrl, setBrandLogoUrl] = useState('')
+  useEffect(() => { fetch('/api/brand').then(r=>r.json()).then(d=>setBrandLogoUrl(d.logo_url||'')).catch(()=>{}) }, [])
+
   return (
     <div style={{ background: D, minHeight: '100vh', color: W, fontFamily: "'IBM Plex Mono','Courier New',monospace", position:'relative', zIndex:2 }}>
       <style>{`
@@ -23,7 +27,7 @@ export default function LandingPage() {
       <header style={{ position:'sticky',top:0,zIndex:20,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0',background:'rgba(13,13,20,0.92)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(255,255,255,0.06)',maxWidth:760,margin:'0 auto',paddingLeft:16,paddingRight:16 }}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <span style={{width:6,height:6,background:L,display:'inline-block'}} />
-          <span className="pixel" style={{fontSize:10,color:L}}>publisio</span>
+          {brandLogoUrl ? <img src={brandLogoUrl} style={{height:24}} /> : <span className="pixel" style={{fontSize:10,color:L}}>publisio</span>}
           <span style={{fontSize:9,color:'#666666',marginLeft:6}}>TOKYO-01</span>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:14}}>

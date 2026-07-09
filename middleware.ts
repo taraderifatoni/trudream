@@ -6,7 +6,7 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // Protected routes
-  if ((pathname.startsWith('/playground') || pathname.startsWith('/settings')) && !hasToken) {
+  if ((pathname.startsWith('/playground') || pathname.startsWith('/settings') || pathname.startsWith('/admin')) && !hasToken) {
     const redirectUrl = new URL('/auth', req.url)
     redirectUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(redirectUrl)
@@ -21,5 +21,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/playground', '/settings', '/auth'],
+  matcher: ['/playground', '/settings', '/admin', '/auth'],
 }

@@ -36,10 +36,12 @@ async function saveImage(item: { url?: string; b64_json?: string }, outputPath: 
 
 export async function generateSlideImage(
   prompt: string,
-  opts: { vivid?: boolean } = {},
+  opts: { vivid?: boolean; customStyle?: string; customStyleVivid?: string } = {},
 ): Promise<string> {
   const outputPath = path.join(TMP, `img-${uuid()}.png`)
-  const fullPrompt = `${prompt}\n\n${opts.vivid ? STYLE_VIVID : STYLE}`
+  const style = opts.customStyle || STYLE
+  const styleVivid = opts.customStyleVivid || STYLE_VIVID
+  const fullPrompt = `${prompt}\n\n${opts.vivid ? styleVivid : style}`
 
   // Primary: gpt-image-1 (may return b64_json instead of url).
   // quality 'medium' — these are backgrounds behind text+scrim, so 'high'

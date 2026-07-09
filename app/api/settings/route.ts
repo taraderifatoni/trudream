@@ -25,7 +25,23 @@ export async function GET(req: NextRequest) {
   if (!uid) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { data, error } = await supabase().from('user_settings').select('*').eq('user_id', uid).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data || { user_id: uid, meta_token: '', ig_account_id: '', fb_page_id: '' })
+  return NextResponse.json(data || {
+    user_id: uid,
+    meta_token: '', ig_account_id: '', fb_page_id: '', openai_key: '',
+    brand_voice: '',
+    logo_url: '',
+    logo_position: 'bottom-right',
+    heading_font: 'Press Start 2P',
+    body_font: 'VT323',
+    slide_bg_color: '#09090B',
+    slide_accent_color: '#CDF22B',
+    slide_accent2_color: '#1E45FB',
+    slide_text_color: '#FFFFFF',
+    slide_muted_color: '#e2e2e2',
+    slide_width: 1080,
+    slide_height: 1350,
+    instagram_handle: '',
+  })
 }
 
 // POST — save user settings
@@ -33,12 +49,32 @@ export async function POST(req: NextRequest) {
   const uid = getUserId(req)
   if (!uid) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { meta_token, ig_account_id, fb_page_id } = body
+  const {
+    meta_token, ig_account_id, fb_page_id, openai_key, brand_voice,
+    logo_url, logo_position, heading_font, body_font,
+    slide_bg_color, slide_accent_color, slide_accent2_color,
+    slide_text_color, slide_muted_color, slide_width, slide_height,
+    instagram_handle,
+  } = body
   const { error } = await supabase().from('user_settings').upsert({
     user_id: uid,
     meta_token: meta_token || '',
     ig_account_id: ig_account_id || '',
     fb_page_id: fb_page_id || '',
+    openai_key: openai_key || '',
+    brand_voice: brand_voice || '',
+    logo_url: logo_url || '',
+    logo_position: logo_position || 'bottom-right',
+    heading_font: heading_font || 'Press Start 2P',
+    body_font: body_font || 'VT323',
+    slide_bg_color: slide_bg_color || '#09090B',
+    slide_accent_color: slide_accent_color || '#CDF22B',
+    slide_accent2_color: slide_accent2_color || '#1E45FB',
+    slide_text_color: slide_text_color || '#FFFFFF',
+    slide_muted_color: slide_muted_color || '#e2e2e2',
+    slide_width: slide_width || 1080,
+    slide_height: slide_height || 1350,
+    instagram_handle: instagram_handle || '',
     updated_at: new Date().toISOString(),
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

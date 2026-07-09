@@ -13,13 +13,15 @@ const STYLE_VIVID = `Vivid retro arcade hero image, synthwave/vaporwave energy. 
 
 export async function generateSlideImage(
   prompt: string,
-  opts: { vivid?: boolean } = {},
+  opts: { vivid?: boolean; customStyle?: string; customStyleVivid?: string } = {},
 ): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set')
 
   const outputPath = path.join(TMP, `img-${uuid()}.png`)
-  const fullPrompt = `${prompt}\n\n${opts.vivid ? STYLE_VIVID : STYLE}`
+  const style = opts.customStyle || STYLE
+  const styleVivid = opts.customStyleVivid || STYLE_VIVID
+  const fullPrompt = `${prompt}\n\n${opts.vivid ? styleVivid : style}`
 
   const res = await fetch(`${ENDPOINT}?key=${apiKey}`, {
     method: 'POST',

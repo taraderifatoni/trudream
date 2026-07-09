@@ -86,6 +86,7 @@ export async function analyzeContent(input: {
   videoPath?: string
   imageBase64?: string
   imageMimeType?: string
+  customPrompt?: string
 }): Promise<{
   slides: SlideContent[]
   caption: string
@@ -93,7 +94,7 @@ export async function analyzeContent(input: {
   videoCaption: string
   screenshotCaption: string
 }> {
-  const parts: any[] = [{ text: PROMPT }]
+  const parts: any[] = [{ text: input.customPrompt || PROMPT }]
 
   if (input.videoPath && fs.existsSync(input.videoPath)) {
     const data = fs.readFileSync(input.videoPath)

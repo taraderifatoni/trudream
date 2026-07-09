@@ -10,8 +10,7 @@ const D = '#111118'
 const S = '#1a1a26'
 const G = '#888888'
 
-const SB = 'https://bhrzwrvmcclggdxnubov.supabase.co'
-const KEY = 'sb_publishable_x7n2-6TC0YTSuv4-Q-5Slg_Zs-adz5c'
+import { SUPABASE_URL as SB, SUPABASE_ANON_KEY as KEY } from '@/lib/supabase-client'
 
 async function apiSignUp(email: string, password: string) {
   const r = await fetch(`${SB}/auth/v1/signup`, {
@@ -60,6 +59,7 @@ function AuthForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [brandLogoUrl, setBrandLogoUrl] = useState('')
 
   useEffect(() => {
     const u = getUserFromCookie()
@@ -75,7 +75,7 @@ function AuthForm() {
         document.cookie = `sb-access-token=${at}; expires=${exp}; path=/; SameSite=Lax`
         if (rt) document.cookie = `sb-refresh-token=${rt}; expires=${exp}; path=/; SameSite=Lax`
         // Fetch user info
-        fetch('https://bhrzwrvmcclggdxnubov.supabase.co/auth/v1/user', {
+        fetch(`${SB}/auth/v1/user`, {
           headers: { 'apikey': KEY, 'Authorization': `Bearer ${at}` }
         }).then(r => r.json()).then(u => {
           if (u.email) {
@@ -87,6 +87,8 @@ function AuthForm() {
       }
     }
   }, [redirect, router])
+
+  useEffect(() => { fetch('/api/brand').then(r=>r.json()).then(d=>setBrandLogoUrl(d.logo_url||'')).catch(()=>{}) }, [])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -124,7 +126,7 @@ function AuthForm() {
       <header style={{ position:'sticky',top:0,zIndex:20,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',background:'rgba(13,13,20,0.92)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(255,255,255,0.06)',maxWidth:760,margin:'0 auto' }}>
         <Link href="/" style={{display:'flex',alignItems:'center',gap:10,textDecoration:'none'}}>
           <span style={{width:6,height:6,background:L,display:'inline-block'}} />
-          <span className="pixel" style={{fontSize:10,color:L}}>publisio</span>
+          {brandLogoUrl ? <img src={brandLogoUrl} style={{height:24}} /> : <span className="pixel" style={{fontSize:10,color:L}}>publisio</span>}
         </Link>
         <span style={{fontSize:9,color:'#666666'}}>TOKYO-01</span>
       </header>
@@ -149,7 +151,7 @@ function AuthForm() {
             <span style={{flex:1,height:1,background:'rgba(255,255,255,0.08)'}} />
           </div>
 
-          <a href="https://bhrzwrvmcclggdxnubov.supabase.co/auth/v1/authorize?provider=google&redirect_to=https://publisio.vercel.app/playground" className="pixel abtn" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10,minHeight:46,background:S,border:'1px solid rgba(255,255,255,0.12)',borderRadius:12,color:W,fontSize:9,textDecoration:'none',cursor:'pointer'}}>
+          <a href={`${SB}/auth/v1/authorize?provider=google&redirect_to=https://publisio.vercel.app/playground`} className="pixel abtn" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10,minHeight:46,background:S,border:'1px solid rgba(255,255,255,0.12)',borderRadius:12,color:W,fontSize:9,textDecoration:'none',cursor:'pointer'}}>
             G · SIGN IN WITH GOOGLE
           </a>
 
