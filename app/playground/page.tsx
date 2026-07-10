@@ -403,6 +403,10 @@ export default function Page() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  // Reference screenshots for clone-style feature
+  const [refScreenshots, setRefScreenshots] = useState<Array<{ file: File; preview: string; base64: string }>>([])
+  const refInputRef = useRef<HTMLInputElement | null>(null)
+  const [referenceUrl, setReferenceUrl] = useState('')
 
   // flow state
   const [loading, setLoading] = useState(false);
@@ -507,6 +511,25 @@ export default function Page() {
     setVideoFile(null);
   }
 
+  /* -------- reference screenshots -------- */
+  function handleRefScreenshots(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || [])
+    files.forEach(f => {
+      if (!f.type.startsWith('image/')) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = String(reader.result || '')
+        const comma = result.indexOf(',')
+        setRefScreenshots(prev => [...prev, { file: f, preview: result, base64: comma >= 0 ? result.slice(comma + 1) : result }])
+      }
+      reader.readAsDataURL(f)
+    })
+    if (e.target) e.target.value = ''
+  }
+  function removeRefScreenshot(index: number) {
+    setRefScreenshots(prev => prev.filter((_, i) => i !== index))
+  }
+
   /* -------- staged progress -------- */
   function startProgress() {
     clearTimers();
@@ -555,7 +578,13 @@ export default function Page() {
         body.imageMimeType = mime;
       }
       body.contentMode = contentMode;
-      body.aspectRatio = aspectRatio;
+       body.aspectRatio = aspectRatio;
+      if (refScreenshots.length > 0) {
+        ;(body as any).refScreenshots = refScreenshots.map(r => ({ base64: r.base64, mimeType: r.file.type }))
+      }
+      if (referenceUrl.trim()) {
+        ;(body as any).referenceUrl = referenceUrl.trim()
+      }
 
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -760,9 +789,9 @@ export default function Page() {
   return (
     <div
       style={{
-        background: '#111118',
+        background: '#FAFAF8',
         minHeight: '100vh',
-        color: C.white,
+        color: '#1A1A1A',
         fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
         position: 'relative',
         zIndex: 2,
@@ -797,9 +826,9 @@ export default function Page() {
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '12px 0',
-            background: 'rgba(13,13,20,0.92)',
+            background: 'rgba(250,250,248,0.94)',
             backdropFilter: 'blur(12px)',
-            borderBottom: `1px solid rgba(255,255,255,0.06)`,
+            borderBottom: `1px solid rgba(0,0,0,0.08)`,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -855,6 +884,47 @@ export default function Page() {
               <span style={{ fontSize: 10, color: '#666666', margin: '0 8px' }}>•••</span>
               <span style={{ fontSize: 10, color: '#666666' }}>● TOKYO-01</span>
             </div>
+          </section>
+
+          {/* ============ Reference Upload (Clone Style) ============ */}
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span className="pixel" style={{ fontSize: 8, color: C.gray }}>REFERENSI FORMAT (opsional)</span>
+            </div>
+            <input
+              type="text"
+              value={referenceUrl}
+              onChange={(e) => setReferenceUrl(e.target.value)}
+              placeholder="Paste link IG carousel..."
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                background: '#111118',
+                border: `1px solid ${C.lime}`,
+                borderRadius: 8,
+                color: C.white,
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
+                boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ textAlign: 'center', fontSize: 10, color: C.gray }}>atau</div>
+            <label className="pixel" style={{ fontSize: 7, color: C.blue, border: `1px solid ${C.blue}`, padding: '4px 8px', borderRadius: 6, cursor: 'pointer', textAlign: 'center' }}>
+              + UPLOAD CONTOH
+              <input ref={refInputRef} type="file" accept="image/*" multiple onChange={handleRefScreenshots} style={{ display: 'none' }} />
+            </label>
+            {refScreenshots.length > 0 ? (
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+                {refScreenshots.map((ref, i) => (
+                  <div key={i} style={{ position: 'relative', flex: '0 0 auto', width: 80, height: 100, borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.blue}` }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={ref.preview} alt={`ref ${i+1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button onClick={() => removeRefScreenshot(i)} style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            ) : <div style={{ fontSize: 10, color: C.gray }}>Upload screenshot slide-slide Instagram sebagai referensi format</div>}
           </section>
 
           {/* ============ Input Card ============ */}
@@ -1719,15 +1789,13 @@ export default function Page() {
                         width: '100%',
                         aspectRatio: '4 / 5',
                         background: `#000 center/cover no-repeat url("${result.slides[previewIndex].imageUrl}")`,
-                        borderRadius: '14px 14px 0 0',
+                        borderRadius: '12px 12px 0 0',
                       }}
                     />
                   ) : null}
-                  <div style={{ padding: 18 }}>
-                    <SlideContent slide={result.slides[previewIndex]} />
-                  </div>
                 </div>
               ) : null}
+                ) : null}
             </div>
           </div>
         ) : null}

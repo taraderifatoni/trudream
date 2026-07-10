@@ -4,12 +4,35 @@ import { v4 as uuid } from 'uuid'
 
 const TMP = process.env.TMP_DIR || '/tmp'
 const MODEL = 'gemini-2.5-flash-image'
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
+
+// Multi-key rotation — matches lib/gemini.ts
+const KEY_1 = process.env.GEMINI_API_KEY!
+let _currentKeyIndex = 0
+function getKey(): string {
+  const keys = [KEY_1, process.env.GEMINI_API_KEY_2 || '', process.env.GEMINI_API_KEY_3 || ''].filter(Boolean)
+  if (keys.length === 0) throw new Error('No Gemini API keys configured')
+  return keys[_currentKeyIndex % keys.length]
+}
+function rotateKey(): void { _currentKeyIndex++ }
 
 const STYLE = `Retro arcade / synthwave aesthetic. Pure black background. Neon lime green (#CDF22B) and electric blue (#1E45FB) glowing accents. 80s arcade cabinet vibe, subtle CRT scanlines, pixel-art / vaporwave energy, bold geometric neon shapes, high contrast glow. No text, no words, no letters, no UI elements. Vertical 4:5 portrait composition.`
 
 // For the cover slide — brighter, punchier arcade hero.
 const STYLE_VIVID = `Vivid retro arcade hero image, synthwave/vaporwave energy. Explosive neon lime green (#CDF22B) and electric blue (#1E45FB) glow on deep black, striking high-contrast lighting, glowing edges, 80s arcade cabinet / cyberpunk feel, eye-catching and bold. It should POP and stand out. No text, no words, no letters, no UI elements. Vertical 4:5 portrait composition.`
+
+async function callWithRetry(url: string, init: RequestInit, maxRetries = 3): Promise<Response> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const res = await fetch(url, init)
+    if ((res.status === 429 || res.status === 503) && attempt < maxRetries - 1) {
+      rotateKey()
+      init.headers = { ...init.headers, 'x-goog-api-key': getKey() } as any
+      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+      continue
+    }
+    return res
+  }
+  throw new Error('All Gemini image keys exhausted (429/503)')
+}
 
 export async function generateSlideImage(
   prompt: string,
@@ -23,12 +46,10 @@ export async function generateSlideImage(
   const styleVivid = opts.customStyleVivid || STYLE_VIVID
   const fullPrompt = `${prompt}\n\n${opts.vivid ? styleVivid : style}`
 
-  const res = await fetch(`${ENDPOINT}?key=${apiKey}`, {
+  const res = await callWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: fullPrompt }] }],
-    }),
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] }),
     signal: AbortSignal.timeout(90_000),
   })
 

@@ -5,9 +5,9 @@
 * { box-sizing: border-box; margin: 0; }
 
 html, body {
-  background: #111118;
-  color: #e8e8ec;
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  background: #FAFAF8;
+  color: #1A1A1A;
+  font-family: 'Inter', -apple-system, sans-serif;
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

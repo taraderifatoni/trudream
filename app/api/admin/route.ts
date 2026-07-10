@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   if (!(await isAdmin(req))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const body = await req.json()
   const allowed = [
-    'gemini_key', 'openai_key', 'admin_emails',
+    'gemini_key', 'gemini_key_2', 'gemini_key_3', 'openai_key', 'admin_emails',
     'content_prompt', 'image_style', 'image_style_vivid',
     'slide_cover_prompt', 'slide_bullets_prompt', 'slide_stat_prompt',
     'slide_grid4_prompt', 'slide_quote_prompt', 'slide_cta_prompt',

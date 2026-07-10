@@ -53,6 +53,8 @@ function AdminForm() {
   const [msg, setMsg] = useState('')
 
   const [geminiKey, setGeminiKey] = useState('')
+  const [geminiKey2, setGeminiKey2] = useState('')
+  const [geminiKey3, setGeminiKey3] = useState('')
   const [openaiKey, setOpenaiKey] = useState('')
   const [adminEmails, setAdminEmails] = useState('')
   const [contentPrompt, setContentPrompt] = useState('')
@@ -75,6 +77,8 @@ function AdminForm() {
       const d = await r.json()
       if (d && !d.error) {
         setGeminiKey(d.gemini_key || '')
+        setGeminiKey2(d.gemini_key_2 || '')
+        setGeminiKey3(d.gemini_key_3 || '')
         setOpenaiKey(d.openai_key || '')
         setAdminEmails(d.admin_emails || '')
         setContentPrompt(d.content_prompt || '')
@@ -104,6 +108,8 @@ function AdminForm() {
         credentials: 'include',
         body: JSON.stringify({
           gemini_key: geminiKey,
+          gemini_key_2: geminiKey2,
+          gemini_key_3: geminiKey3,
           openai_key: openaiKey,
           admin_emails: adminEmails,
           content_prompt: contentPrompt,
@@ -148,9 +154,9 @@ function AdminForm() {
           position: 'sticky', top: 0, zIndex: 20,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '12px 0',
-          background: 'rgba(13,13,20,0.92)',
+          background: 'rgba(250,250,248,0.94)',
           backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          borderBottom: '1px solid rgba(0,0,0,0.08)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span className="blink" style={{ width: 6, height: 6, background: L, display: 'inline-block' }} />
@@ -210,8 +216,14 @@ function AdminForm() {
 
               {tab === 'keys' ? (
                 <>
-                  <Field label="Gemini API Key" hint="Google Gemini API key for content analysis.">
+                  <Field label="Gemini API Key" hint="Primary Google Gemini API key for content analysis.">
                     <input type="password" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} placeholder="AIza..." />
+                  </Field>
+                  <Field label="Gemini API Key 2" hint="Backup key — auto-switches when primary hits quota (429).">
+                    <input type="password" value={geminiKey2} onChange={e => setGeminiKey2(e.target.value)} placeholder="AIza..." />
+                  </Field>
+                  <Field label="Gemini API Key 3" hint="Second backup key.">
+                    <input type="password" value={geminiKey3} onChange={e => setGeminiKey3(e.target.value)} placeholder="AIza..." />
                   </Field>
                   <Field label="OpenAI API Key" hint="OpenAI key for DALL-E / GPT-image generation.">
                     <input type="password" value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} placeholder="sk-..." />

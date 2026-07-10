@@ -19,15 +19,28 @@ const H = 1350
 
 const PAD_X = 84
 const PAD_TOP = 96
-const PAD_BOTTOM = 110
 
+// ─── Brand palette (HARD LOCK — no other colors allowed on slides) ───────────
+
+const BEAUTIFIO = {
+  primary: '#084463',   // peacock dark blue
+  secondary: '#6BB9D4', // icy sky blue
+  accent: '#FFC64F',    // saffron yellow/gold
+  bg: '#F8FAFC',        // cloud white
+  white: '#FFFFFF',
+  dark: '#1E2938',      // deep slate
+  muted: '#647488',     // slate gray
+}
+
+// Legacy color slots kept for the design-context type and the two auxiliary
+// renderers (video overlay / screenshot). Everything maps onto the brand.
 const COLORS = {
-  bg: '#09090B', // dark base (used when there is no AI image)
-  accent: '#CDF22B', // arcade neon lime
-  accent2: '#1E45FB', // arcade blue
-  white: '#ffffff',
-  muted: '#e2e2e2',
-  dim: '#cfcfcf',
+  bg: BEAUTIFIO.primary,
+  accent: BEAUTIFIO.accent,
+  accent2: BEAUTIFIO.secondary,
+  white: BEAUTIFIO.white,
+  muted: BEAUTIFIO.muted,
+  dim: BEAUTIFIO.secondary,
 }
 
 interface SlideDesignCtx {
@@ -39,11 +52,9 @@ interface SlideDesignCtx {
   logoPosition?: string
 }
 
-const FONT_PIXEL = 'Press Start 2P' // headings / short punchy text (arcade style, kept as default)
-const FONT_BODY = 'VT323' // body (arcade style, kept as default)
-// NOTE: These are FALLBACK defaults. When user has settings in user_settings,
-// generate route overrides with user's heading_font and body_font (e.g. Poppins/Inter)
-const FONT = FONT_BODY
+// Poppins is the only registered family — used for both heading and body since
+// Inter could not be downloaded.
+const FONT = 'Poppins'
 
 // Font weight keywords selected via ctx.font
 const WEIGHT = {
@@ -62,7 +73,7 @@ function registerFonts() {
   fontsRegistered = true
 
   const files: [string, string][] = [
-    // Brand default fonts (Poppins + Inter) — registered first so they take priority
+    // Brand fonts (Poppins) — used for headings and body.
     ['Poppins-Bold.ttf', 'Poppins'],
     ['Poppins-SemiBold.ttf', 'Poppins'],
     ['Poppins-Medium.ttf', 'Poppins'],
@@ -112,7 +123,6 @@ function wrapText(ctx: SKRSContext2D, text: string, maxWidth: number): string[] 
   let current = ''
 
   for (const word of words) {
-    // A word wider than the line (common with the wide pixel font) is hard-broken.
     if (ctx.measureText(word).width > maxWidth) {
       if (current) {
         lines.push(current)
@@ -179,7 +189,7 @@ function drawLines(
 ): number {
   ctx.textAlign = align
   ctx.textBaseline = 'alphabetic'
-  let y = yTop + lineHeight * 0.8 // approximate baseline offset within first line
+  let y = yTop + lineHeight * 0.8
   for (const line of lines) {
     ctx.fillText(line, x, y)
     y += lineHeight
@@ -205,109 +215,59 @@ function roundRectPath(
   ctx.closePath()
 }
 
-// ─── Background ─────────────────────────────────────────────────────────────
+// ─── Image helpers ──────────────────────────────────────────────────────────
 
-async function drawBackground(
-  ctx: SKRSContext2D,
-  slide: SlideContent,
-  opts: { light?: boolean } = {},
-  dc: SlideDesignCtx,
-) {
-  let img: Image | null = null
+async function loadSlideImage(slide: SlideContent): Promise<Image | null> {
   if (slide.imagePath && fs.existsSync(slide.imagePath)) {
     try {
-      img = await loadImage(slide.imagePath)
+      return await loadImage(slide.imagePath)
     } catch {
-      img = null
+      return null
     }
   }
-
-  if (img) {
-    // Cover: scale to fill, center-crop.
-    const scale = Math.max(dc.W / img.width, dc.H / img.height)
-    const dw = img.width * scale
-    const dh = img.height * scale
-    const dx = (dc.W - dw) / 2
-    const dy = (dc.H - dh) / 2
-    ctx.drawImage(img, dx, dy, dw, dh)
-
-    // Light mode (cover): keep the image vivid & contrasty — only a bottom
-    // gradient behind the lower-third title, no full-canvas darkening.
-    if (opts.light) {
-      const start = dc.H * 0.48
-      const g = ctx.createLinearGradient(0, start, 0, dc.H)
-      g.addColorStop(0, 'rgba(8,8,10,0)')
-      g.addColorStop(0.55, 'rgba(8,8,10,0.55)')
-      g.addColorStop(1, 'rgba(8,8,10,0.92)')
-      ctx.fillStyle = g
-      ctx.fillRect(0, start, dc.W, dc.H - start)
-    } else {
-      // Full-canvas darkening scrim for legibility (only on real images).
-      ctx.fillStyle = 'rgba(10,10,10,0.55)'
-      ctx.fillRect(0, 0, dc.W, dc.H)
-
-      // Stronger bottom gradient (bottom 45%).
-      const bottomStart = dc.H * 0.55
-      const bottomGrad = ctx.createLinearGradient(0, bottomStart, 0, dc.H)
-      bottomGrad.addColorStop(0, 'rgba(10,10,10,0)')
-      bottomGrad.addColorStop(1, 'rgba(10,10,10,0.92)')
-      ctx.fillStyle = bottomGrad
-      ctx.fillRect(0, bottomStart, dc.W, dc.H - bottomStart)
-
-      // Subtle top gradient (top 25%).
-      const topEnd = dc.H * 0.25
-      const topGrad = ctx.createLinearGradient(0, 0, 0, topEnd)
-      topGrad.addColorStop(0, 'rgba(10,10,10,0.6)')
-      topGrad.addColorStop(1, 'rgba(10,10,10,0)')
-      ctx.fillStyle = topGrad
-      ctx.fillRect(0, 0, dc.W, topEnd)
-    }
-    return
-  }
-
-  // No image — bright blue arcade backdrop (dominant colour, no scrim).
-  ctx.fillStyle = dc.colors.bg
-  ctx.fillRect(0, 0, dc.W, dc.H)
+  return null
 }
 
-/** Draw a semi-transparent rounded backdrop behind text for readability */
-function drawTextBackdrop(
-  ctx: SKRSContext2D,
-  x: number, y: number, w: number, h: number,
-  dc: SlideDesignCtx,
-) {
-  const pad = 28
-  const r = 16
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
-  const rx = x - pad, ry = y - pad, rw = w + pad * 2, rh = h + pad * 2
-  const radius = Math.min(r, rw / 2, rh / 2)
+/** Draw an image cover-cropped into the top region [0..regionH]. */
+function drawImageTop(ctx: SKRSContext2D, img: Image, w: number, regionH: number) {
+  const scale = Math.max(w / img.width, regionH / img.height)
+  const dw = img.width * scale
+  const dh = img.height * scale
+  const dx = (w - dw) / 2
+  const dy = (regionH - dh) / 2
+  ctx.save()
   ctx.beginPath()
-  ctx.moveTo(rx + radius, ry)
-  ctx.arcTo(rx + rw, ry, rx + rw, ry + rh, radius)
-  ctx.arcTo(rx + rw, ry + rh, rx, ry + rh, radius)
-  ctx.arcTo(rx, ry + rh, rx, ry, radius)
-  ctx.arcTo(rx, ry, rx + rw, ry, radius)
-  ctx.closePath()
-  ctx.fill()
+  ctx.rect(0, 0, w, regionH)
+  ctx.clip()
+  ctx.drawImage(img, dx, dy, dw, dh)
+  ctx.restore()
 }
 
-function drawTextBackdropForLines(
-  ctx: SKRSContext2D,
-  lines: string[], x: number, yTop: number, lineHeight: number, maxWidth: number,
-  dc: SlideDesignCtx,
-  extraPad?: number,
-) {
-  const totalH = lines.length * lineHeight + (extraPad || 0)
-  drawTextBackdrop(ctx, x, yTop, maxWidth, totalH, dc)
+function drawImageFull(ctx: SKRSContext2D, img: Image, w: number, h: number) {
+  const scale = Math.max(w / img.width, h / img.height)
+  ctx.drawImage(img, (w - img.width * scale) / 2, (h - img.height * scale) / 2, img.width * scale, img.height * scale)
+}
+function drawImageLeft(ctx: SKRSContext2D, img: Image, regionW: number, h: number) {
+  const scale = Math.min(regionW / img.width, h / img.height)
+  const dh = img.height * scale
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, regionW, h); ctx.clip()
+  ctx.drawImage(img, 0, (h - dh) / 2, img.width * scale, dh); ctx.restore()
+}
+function drawImageRight(ctx: SKRSContext2D, img: Image, regionW: number, h: number) {
+  const scale = Math.min(regionW / img.width, h / img.height)
+  const dh = img.height * scale
+  const x = ctx.canvas ? (ctx.canvas as any).width : 0
+  ctx.save(); ctx.beginPath(); ctx.rect(x - regionW, 0, regionW, h); ctx.clip()
+  ctx.drawImage(img, x - regionW, (h - dh) / 2, img.width * scale, dh); ctx.restore()
 }
 
-// ─── Header (tag pill) ──────────────────────────────────────────────────────
+// ─── Background ─────────────────────────────────────────────────────────────
 
-/** Draws the tag pill at top-left and returns the y where content may begin. */
-// Tag pill removed per request — no header label is drawn. Content starts
-// from the top padding.
-function drawHeader(_ctx: SKRSContext2D, _tag: string): number {
-  return PAD_TOP
+// Solid cloud-white base. Each renderer paints its own solid color blocks over
+// this — there are NO gradient scrims anymore.
+function drawBackground(ctx: SKRSContext2D, dc: SlideDesignCtx) {
+  ctx.fillStyle = BEAUTIFIO.bg
+  ctx.fillRect(0, 0, dc.W, dc.H)
 }
 
 // ─── Logo ───────────────────────────────────────────────────────────────────
@@ -346,384 +306,550 @@ async function drawLogo(ctx2d: SKRSContext2D, dc: SlideDesignCtx) {
     default: return
   }
 
-  ctx2d.globalAlpha = 0.8
+  ctx2d.globalAlpha = 0.85
   ctx2d.drawImage(img, x, y, logoW, logoH)
   ctx2d.globalAlpha = 1
 }
 
-// ─── Footer ─────────────────────────────────────────────────────────────────
-
-// Footer handle is only drawn on the first slide (per request); page numbers
-// removed. The last (CTA) slide shows "Follow @handle" in its body instead.
-function drawFooter(ctx: SKRSContext2D, handle: string, showHandle: boolean, dc: SlideDesignCtx) {
-  if (!showHandle || !handle) return
-  const y = dc.H - PAD_BOTTOM + 40
-  ctx.font = font(WEIGHT.semibold, 18, dc.headingFont)
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
-  ctx.fillStyle = dc.colors.accent
-  ctx.fillText(handle, PAD_X, y)
-}
-
-// ─── Layout: content area helpers ───────────────────────────────────────────
-
-const CONTENT_W = W - PAD_X * 2
-
-// Vertical band available for body content (below header, above footer).
-function contentBounds(headerBottom: number, dc: SlideDesignCtx) {
-  const top = headerBottom + 60
-  const bottom = dc.H - PAD_BOTTOM - 30
-  return { top, bottom, height: bottom - top }
-}
-
 // ─── Per-type renderers ─────────────────────────────────────────────────────
 
-function renderCover(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number, dc: SlideDesignCtx) {
-  const { bottom } = contentBounds(headerBottom, dc)
+// COVER — image top 55%, solid peacock block bottom 45%. No gradient.
+async function renderCover(
+  ctx: SKRSContext2D,
+  slide: SlideContent,
+  dc: SlideDesignCtx,
+  handle: string,
+) {
+  const imgH = Math.round(dc.H * 0.55)
 
-  // Subtitle first (measured to reserve room below the title block).
-  let subtitleBlock: { lines: string[]; size: number; lineHeight: number } | null = null
-  if (slide.subtitle) {
-    ctx.font = font(WEIGHT.medium, 48, dc.bodyFont)
-    const lines = wrapText(ctx, slide.subtitle, CONTENT_W)
-    subtitleBlock = { lines, size: 48, lineHeight: 48 * 1.15 }
+  const img = await loadSlideImage(slide)
+  if (img) drawImageTop(ctx, img, dc.W, imgH)
+  else {
+    ctx.fillStyle = BEAUTIFIO.secondary
+    ctx.fillRect(0, 0, dc.W, imgH)
   }
 
-  const subtitleH = subtitleBlock
-    ? subtitleBlock.lines.length * subtitleBlock.lineHeight + 34
-    : 0
+  // Solid peacock block, bottom 45%.
+  ctx.fillStyle = BEAUTIFIO.primary
+  ctx.fillRect(0, imgH, dc.W, dc.H - imgH)
 
-  // Title — big pixel arcade type, lower-third emphasis, auto-shrink.
-  const title = slide.title || ''
-  const titleMaxH = bottom - (headerBottom + 60) - subtitleH
-  const fitted = fitText(ctx, title, {
+  const contentW = dc.W - PAD_X * 2
+  const blockTop = imgH + 72
+  const blockBottom = dc.H - 96
+
+  // Measure subtitle first to reserve room.
+  const subSize = 34
+  let subLines: string[] = []
+  if (slide.subtitle) {
+    ctx.font = font(WEIGHT.regular, subSize, FONT)
+    subLines = wrapText(ctx, slide.subtitle, contentW)
+  }
+  const subH = subLines.length ? subLines.length * subSize * 1.3 + 28 : 0
+
+  // Title — saffron, Poppins Bold, 72–80px auto-shrink.
+  const titleMaxH = blockBottom - blockTop - subH
+  const fitted = fitText(ctx, slide.title || '', {
     weight: WEIGHT.bold,
-    startSize: 60,
-    minSize: 22,
-    maxWidth: CONTENT_W,
+    startSize: 80,
+    minSize: 56,
+    maxWidth: contentW,
     maxHeight: Math.max(titleMaxH, 120),
-    lineHeightRatio: 1.32,
-    family: dc.headingFont,
+    lineHeightRatio: 1.1,
+    family: FONT,
   })
 
-  const totalBlockH = fitted.lines.length * fitted.lineHeight + subtitleH
-  // Anchor block to the lower third: place its bottom near `bottom`.
-  const blockTop = Math.max(headerBottom + 60, bottom - totalBlockH)
+  let y = blockTop
+  ctx.fillStyle = BEAUTIFIO.accent
+  ctx.font = font(WEIGHT.bold, fitted.size, FONT)
+  y = drawLines(ctx, fitted.lines, PAD_X, y, fitted.lineHeight, 'left')
 
-  // Text backdrop for readability
-  drawTextBackdropForLines(ctx, fitted.lines, PAD_X, blockTop, fitted.lineHeight, CONTENT_W, dc, subtitleH + 30)
+  if (subLines.length) {
+    y += 28
+    ctx.fillStyle = BEAUTIFIO.white
+    ctx.font = font(WEIGHT.regular, subSize, FONT)
+    drawLines(ctx, subLines, PAD_X, y, subSize * 1.3, 'left')
+  }
 
-  ctx.fillStyle = dc.colors.accent
-  ctx.font = font(WEIGHT.bold, fitted.size, dc.headingFont)
-  const afterTitle = drawLines(ctx, fitted.lines, PAD_X, blockTop, fitted.lineHeight, 'left')
-
-  if (subtitleBlock) {
-    ctx.fillStyle = dc.colors.white
-    ctx.font = font(WEIGHT.medium, subtitleBlock.size, dc.bodyFont)
-    drawLines(ctx, subtitleBlock.lines, PAD_X, afterTitle + 34, subtitleBlock.lineHeight, 'left')
+  // Handle — bottom-right, slate gray, 20px.
+  if (handle) {
+    ctx.fillStyle = BEAUTIFIO.muted
+    ctx.font = font(WEIGHT.regular, 20, FONT)
+    ctx.textAlign = 'right'
+    ctx.textBaseline = 'alphabetic'
+    ctx.fillText(handle, dc.W - PAD_X, dc.H - 48)
   }
 }
 
-function renderBullets(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number, dc: SlideDesignCtx) {
-  const { top, bottom } = contentBounds(headerBottom, dc)
-
-  // Title at top.
-  let y = top
-  if (slide.title) {
-    const fitted = fitText(ctx, slide.title, {
-      weight: WEIGHT.bold,
-      startSize: 40,
-      minSize: 20,
-      maxWidth: CONTENT_W,
-      maxHeight: 300,
-      lineHeightRatio: 1.3,
-      family: dc.headingFont,
-    })
-    ctx.fillStyle = dc.colors.accent
-    ctx.font = font(WEIGHT.bold, fitted.size, dc.headingFont)
-    y = drawLines(ctx, fitted.lines, PAD_X, y, fitted.lineHeight, 'left') + 56
-  }
+// BULLETS — adaptive: image size, font sizes, and vertical centering scale with bullet count.
+async function renderBullets(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx) {
+  ctx.fillStyle = BEAUTIFIO.primary
+  ctx.fillRect(0, 0, dc.W, dc.H)
 
   const bullets = slide.bullets || []
-  if (bullets.length === 0) return
+  const bulletCount = bullets.length
 
-  const markX = PAD_X
-  const textX = PAD_X + 44 // hanging indent
-  const textMaxW = CONTENT_W - 44
+  const imgPct = bulletCount <= 2 ? 0.40 : bulletCount <= 4 ? 0.28 : 0.18
+  const imgH = Math.round(dc.H * imgPct)
+  const img = await loadSlideImage(slide)
+  if (img) drawImageTop(ctx, img, dc.W, imgH)
 
-  // Choose a bullet font size that lets everything fit.
-  let bulletSize = 50
-  const measure = (size: number) => {
-    ctx.font = font(WEIGHT.medium, size, dc.bodyFont)
-    const lh = size * 1.15
-    let total = 0
-    for (const b of bullets) {
-      const lines = wrapText(ctx, b, textMaxW)
-      total += lines.length * lh + size * 0.7 // row gap
-    }
-    return total
+  const contentW = dc.W - PAD_X * 2
+
+  const titleSize = bulletCount <= 2 ? 56 : bulletCount <= 4 ? 48 : 42
+  const bulletSize = bulletCount <= 2 ? 34 : bulletCount <= 4 ? 30 : 26
+  const lineHeightRatio = 1.45
+  const bulletLH = bulletSize * lineHeightRatio
+
+  let totalH = 0
+  const titleLines: string[] = []
+  if (slide.title) {
+    ctx.font = font(WEIGHT.semibold, titleSize, FONT)
+    titleLines.push(...wrapText(ctx, slide.title, contentW))
+    totalH += titleLines.length * titleSize * lineHeightRatio + 24
   }
-  while (bulletSize > 32 && y + measure(bulletSize) > bottom) {
-    bulletSize -= 2
-  }
-
-  const lineHeight = bulletSize * 1.15
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
 
   for (const b of bullets) {
-    ctx.font = font(WEIGHT.medium, bulletSize, dc.bodyFont)
-    const lines = wrapText(ctx, b, textMaxW)
-    const rowTop = y
-
-    // Accent bullet mark — a neon square block (arcade pixel style).
-    ctx.fillStyle = dc.colors.accent
-    const dotR = Math.max(6, bulletSize * 0.16)
-    ctx.fillRect(markX, rowTop + lineHeight * 0.5 - dotR, dotR * 2, dotR * 2)
-
-    // Bullet text (white, hanging indent).
-    ctx.fillStyle = dc.colors.white
-    ctx.font = font(WEIGHT.medium, bulletSize, dc.bodyFont)
-    drawLines(ctx, lines, textX, rowTop, lineHeight, 'left')
-
-    y = rowTop + lines.length * lineHeight + bulletSize * 0.7
-    if (y > bottom) break
+    ctx.font = font(WEIGHT.regular, bulletSize, FONT)
+    totalH += wrapText(ctx, b, contentW - 48).length * bulletLH + 12
   }
+
+  const margin = 60
+  const availH = (dc.H - imgH) - margin * 2
+  let y = imgH + margin + Math.max(0, (availH - totalH) / 2)
+
+  if (titleLines.length) {
+    ctx.fillStyle = BEAUTIFIO.accent
+    ctx.font = font(WEIGHT.semibold, titleSize, FONT)
+    y = drawLines(ctx, titleLines, PAD_X, y, titleSize * lineHeightRatio, 'left') + 24
+  }
+
+  for (const b of bullets) {
+    ctx.font = font(WEIGHT.regular, bulletSize, FONT)
+    const lines = wrapText(ctx, b, contentW - 48)
+    ctx.fillStyle = BEAUTIFIO.accent
+    const sq = Math.max(8, bulletSize * 0.35)
+    ctx.fillRect(PAD_X, y + bulletLH * 0.5 - sq / 2, sq, sq)
+    ctx.fillStyle = BEAUTIFIO.white
+    drawLines(ctx, lines, PAD_X + 40, y, bulletLH, 'left')
+    y += lines.length * bulletLH + 12
+  }
+
+  ctx.fillStyle = BEAUTIFIO.muted
+  ctx.font = font(WEIGHT.regular, 20, FONT)
+  ctx.textAlign = 'right'
+  ctx.fillText('@beautifio.space', dc.W - PAD_X, dc.H - 40)
+  ctx.textAlign = 'left'
 }
 
-function renderStat(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number, dc: SlideDesignCtx) {
-  const { top, bottom, height } = contentBounds(headerBottom, dc)
+// STAT — no image, solid peacock. Huge saffron number, deco lines, label.
+function renderStat(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx) {
+  ctx.fillStyle = BEAUTIFIO.primary
+  ctx.fillRect(0, 0, dc.W, dc.H)
+
   const stats = slide.stats || []
   if (stats.length === 0) return
 
   const cx = dc.W / 2
-  const valueSize = stats.length > 2 ? 72 : 96
-  const labelSize = 52
-  const blockGap = 56
+  const numSize = 180
+  const labelSize = 40
+  const lineW = 130
+  const blockGap = 80
 
-  // Pre-measure to center vertically.
   ctx.textAlign = 'center'
   const blocks = stats.map((s) => {
-    ctx.font = font(WEIGHT.medium, labelSize, dc.bodyFont)
-    const labelLines = wrapText(ctx, s.label, CONTENT_W)
-    const h = valueSize * 1.25 + 22 + labelLines.length * labelSize * 1.15
+    ctx.font = font(WEIGHT.regular, labelSize, FONT)
+    const labelLines = wrapText(ctx, s.label, dc.W - PAD_X * 2)
+    const h = 40 + numSize * 1.1 + 40 + labelLines.length * labelSize * 1.25
     return { s, labelLines, h }
   })
   const totalH = blocks.reduce((a, b) => a + b.h, 0) + blockGap * (blocks.length - 1)
-  let y = top + Math.max(0, (height - totalH) / 2)
+  let y = Math.max(PAD_TOP, (dc.H - totalH) / 2)
 
   for (const block of blocks) {
-    // Value — huge pixel accent.
-    ctx.fillStyle = dc.colors.accent
-    ctx.font = font(WEIGHT.bold, valueSize, dc.headingFont)
+    // Decorative line above.
+    ctx.strokeStyle = BEAUTIFIO.secondary
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.moveTo(cx - lineW / 2, y)
+    ctx.lineTo(cx + lineW / 2, y)
+    ctx.stroke()
+    y += 40
+
+    // Number.
+    ctx.fillStyle = BEAUTIFIO.accent
+    ctx.font = font(WEIGHT.bold, numSize, FONT)
     ctx.textBaseline = 'alphabetic'
-    ctx.fillText(block.s.value, cx, y + valueSize * 0.9)
-    y += valueSize * 1.25 + 22
+    ctx.fillText(block.s.value, cx, y + numSize * 0.8)
+    y += numSize * 1.1
 
-    // Label — white body.
-    ctx.fillStyle = dc.colors.white
-    ctx.font = font(WEIGHT.medium, labelSize, dc.bodyFont)
-    y = drawLines(ctx, block.labelLines, cx, y, labelSize * 1.15, 'center')
+    // Decorative line below.
+    ctx.strokeStyle = BEAUTIFIO.secondary
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.moveTo(cx - lineW / 2, y)
+    ctx.lineTo(cx + lineW / 2, y)
+    ctx.stroke()
+    y += 40
+
+    // Label.
+    ctx.fillStyle = BEAUTIFIO.white
+    ctx.font = font(WEIGHT.regular, labelSize, FONT)
+    y = drawLines(ctx, block.labelLines, cx, y, labelSize * 1.25, 'center')
     y += blockGap
-
-    if (y > bottom) break
   }
 }
 
-function renderGrid4(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number, dc: SlideDesignCtx) {
-  const { top, bottom } = contentBounds(headerBottom, dc)
-
-  let y = top
-  if (slide.title) {
-    const fitted = fitText(ctx, slide.title, {
-      weight: WEIGHT.bold,
-      startSize: 34,
-      minSize: 18,
-      maxWidth: CONTENT_W,
-      maxHeight: 220,
-      lineHeightRatio: 1.3,
-      family: dc.headingFont,
-    })
-    ctx.fillStyle = dc.colors.accent
-    ctx.font = font(WEIGHT.bold, fitted.size, dc.headingFont)
-    y = drawLines(ctx, fitted.lines, PAD_X, y, fitted.lineHeight, 'left') + 50
-  }
-
+// GRID4 — no image, 4 solid quadrants with alternating backgrounds.
+function renderGrid4(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx) {
   const cards = (slide.cards || []).slice(0, 4)
-  if (cards.length === 0) return
+  const halfW = dc.W / 2
+  const halfH = dc.H / 2
 
-  const colGap = 40
-  const rowGap = 44
-  const cellW = (CONTENT_W - colGap) / 2
-  const gridTop = y
-  const gridH = bottom - gridTop
-  const cellH = (gridH - rowGap) / 2
-
-  // Neon separators between rows/cols (arcade grid).
-  ctx.strokeStyle = 'rgba(205,242,43,0.35)'
-  ctx.lineWidth = 2
-  // Vertical divider.
-  const midX = PAD_X + cellW + colGap / 2
-  ctx.beginPath()
-  ctx.moveTo(midX, gridTop)
-  ctx.lineTo(midX, gridTop + gridH)
-  ctx.stroke()
-  // Horizontal divider (only if >2 cards).
-  if (cards.length > 2) {
-    const midY = gridTop + cellH + rowGap / 2
-    ctx.beginPath()
-    ctx.moveTo(PAD_X, midY)
-    ctx.lineTo(PAD_X + CONTENT_W, midY)
-    ctx.stroke()
+  const quads = [
+    { x: 0, y: 0, bg: BEAUTIFIO.primary },      // top-left
+    { x: halfW, y: 0, bg: BEAUTIFIO.dark },     // top-right
+    { x: 0, y: halfH, bg: BEAUTIFIO.dark },     // bottom-left
+    { x: halfW, y: halfH, bg: BEAUTIFIO.primary }, // bottom-right
+  ]
+  for (const q of quads) {
+    ctx.fillStyle = q.bg
+    ctx.fillRect(q.x, q.y, halfW, halfH)
   }
 
+  // Separator lines — icy sky blue, 2px.
+  ctx.strokeStyle = BEAUTIFIO.secondary
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(halfW, 0)
+  ctx.lineTo(halfW, dc.H)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.moveTo(0, halfH)
+  ctx.lineTo(dc.W, halfH)
+  ctx.stroke()
+
+  const pad = 64
   cards.forEach((card, i) => {
-    const col = i % 2
-    const row = Math.floor(i / 2)
-    const cellX = PAD_X + col * (cellW + colGap)
-    const cellY = gridTop + row * (cellH + rowGap)
-    const innerW = cellW - 8
+    const q = quads[i]
+    const innerW = halfW - pad * 2
+    const cellH = dc.H / 2
 
-    let cy = cellY
+    // Measure actual content height
+    const numH = 40
+    ctx.font = font(WEIGHT.semibold, 36, FONT)
+    const titleLines = wrapText(ctx, card.title || '', innerW).slice(0, 2)
+    const titleH = titleLines.length * (36 * 1.15)
+    ctx.font = font(WEIGHT.regular, 26, FONT)
+    const maxLines = Math.max(1, Math.floor((cellH - pad * 2) / (26 * 1.3)))
+    const descLines = wrapText(ctx, card.desc || '', innerW).slice(0, maxLines)
+    const descH = descLines.length * (26 * 1.3)
+    const totalH = numH + 26 + titleH + 12 + descH
+    let cy = q.y + (cellH - totalH) / 2
 
-    // Number — pixel accent.
-    ctx.fillStyle = dc.colors.accent
-    ctx.font = font(WEIGHT.bold, 26, dc.headingFont)
+    // Number — saffron SemiBold 40px.
+    ctx.fillStyle = BEAUTIFIO.accent
+    ctx.font = font(WEIGHT.semibold, 40, FONT)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
-    ctx.fillText(card.num || '', cellX, cy + 26)
-    cy += 26 + 22
+    ctx.fillText(card.num || '', q.x + pad, cy + 40)
+    cy += 40 + 26
 
-    // Title — body.
-    ctx.fillStyle = dc.colors.white
-    ctx.font = font(WEIGHT.semibold, 40, dc.bodyFont)
-    const titleLines = wrapText(ctx, card.title || '', innerW).slice(0, 2)
-    cy = drawLines(ctx, titleLines, cellX, cy, 40 * 1.12, 'left') + 10
+    // Title — white SemiBold 36px.
+    ctx.fillStyle = BEAUTIFIO.white
+    ctx.font = font(WEIGHT.semibold, 36, FONT)
+    cy = drawLines(ctx, titleLines, q.x + pad, cy, 36 * 1.15, 'left') + 12
 
-    // Description — body.
-    ctx.fillStyle = dc.colors.muted
-    ctx.font = font(WEIGHT.regular, 32, dc.bodyFont)
-    const descMaxLines = Math.max(1, Math.floor((cellY + cellH - cy) / (32 * 1.15)))
-    const descLines = wrapText(ctx, card.desc || '', innerW).slice(0, descMaxLines)
-    drawLines(ctx, descLines, cellX, cy, 32 * 1.15, 'left')
+    // Description — icy sky blue Regular 26px.
+    ctx.fillStyle = BEAUTIFIO.secondary
+    ctx.font = font(WEIGHT.regular, 26, FONT)
+    drawLines(ctx, descLines, q.x + pad, cy, 26 * 1.3, 'left')
   })
 }
 
-function renderQuote(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number, dc: SlideDesignCtx) {
-  const { top, bottom, height } = contentBounds(headerBottom, dc)
+// QUOTE — no full image, solid deep-slate. Optional small circular portrait.
+async function renderQuote(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx) {
+  ctx.fillStyle = BEAUTIFIO.dark
+  ctx.fillRect(0, 0, dc.W, dc.H)
+
   const cx = dc.W / 2
-  const maxW = CONTENT_W - 40
+  const maxW = dc.W - PAD_X * 2
 
-  // Big leading quote glyph.
-  const glyphSize = 200
-  ctx.fillStyle = dc.colors.accent
-  ctx.font = font(WEIGHT.bold, glyphSize, dc.bodyFont)
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'alphabetic'
+  // Small portrait (from AI, if any): circle, 200px, top center.
+  let topOffset = PAD_TOP
+  const img = await loadSlideImage(slide)
+  if (img) {
+    const d = 200
+    const py = 130
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(cx, py + d / 2, d / 2, 0, Math.PI * 2)
+    ctx.clip()
+    const scale = Math.max(d / img.width, d / img.height)
+    const dw = img.width * scale
+    const dh = img.height * scale
+    ctx.drawImage(img, cx - dw / 2, py + d / 2 - dh / 2, dw, dh)
+    ctx.restore()
+    topOffset = py + d + 40
+  }
 
-  // Quote text, auto-fit (body font for readability).
+  // Quote text — auto-fit 44 → 34.
   const fitted = fitText(ctx, slide.quote || '', {
-    weight: WEIGHT.semibold,
-    startSize: 66,
-    minSize: 42,
+    weight: WEIGHT.medium,
+    startSize: 44,
+    minSize: 34,
     maxWidth: maxW,
-    maxHeight: height - 260,
-    lineHeightRatio: 1.2,
-    family: dc.bodyFont,
+    maxHeight: dc.H * 0.5,
+    lineHeightRatio: 1.25,
+    family: FONT,
   })
 
   let sourceLines: string[] = []
   if (slide.source) {
-    ctx.font = font(WEIGHT.medium, 44, dc.bodyFont)
+    ctx.font = font(WEIGHT.regular, 28, FONT)
     sourceLines = wrapText(ctx, slide.source, maxW)
   }
 
-  const quoteH = fitted.lines.length * fitted.lineHeight
-  const sourceH = sourceLines.length ? sourceLines.length * 44 * 1.2 + 44 : 0
+  const glyphSize = 80
   const glyphH = glyphSize * 0.5
-  const totalH = glyphH + 20 + quoteH + sourceH
-  let y = top + Math.max(0, (height - totalH) / 2)
+  const quoteH = fitted.lines.length * fitted.lineHeight
+  const sourceH = sourceLines.length ? sourceLines.length * 28 * 1.3 + 44 : 0
+  const totalH = glyphH + 24 + quoteH + sourceH
+  let y = topOffset + Math.max(0, (dc.H - topOffset - totalH) / 2)
 
-  // Glyph.
-  ctx.fillStyle = dc.colors.accent
-  ctx.font = font(WEIGHT.bold, glyphSize, dc.bodyFont)
+  // Large quote mark — saffron 160px.
+  ctx.fillStyle = BEAUTIFIO.accent
+  ctx.font = font(WEIGHT.bold, glyphSize, FONT)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
   ctx.fillText('\u201C', cx, y + glyphSize * 0.72)
-  y += glyphH + 20
+  y += glyphH + 24
 
-  // Quote.
-  ctx.fillStyle = dc.colors.white
-  ctx.font = font(WEIGHT.semibold, fitted.size, dc.bodyFont)
+  // Quote — white.
+  ctx.fillStyle = BEAUTIFIO.white
+  ctx.font = font(WEIGHT.medium, fitted.size, FONT)
   y = drawLines(ctx, fitted.lines, cx, y, fitted.lineHeight, 'center')
 
-  // Source.
+  // Source — icy sky blue 28px.
   if (sourceLines.length) {
     y += 44
-    ctx.fillStyle = dc.colors.accent
-    ctx.font = font(WEIGHT.medium, 44, dc.bodyFont)
-    drawLines(ctx, sourceLines, cx, y, 44 * 1.2, 'center')
+    ctx.fillStyle = BEAUTIFIO.secondary
+    ctx.font = font(WEIGHT.regular, 28, FONT)
+    drawLines(ctx, sourceLines, cx, y, 28 * 1.3, 'center')
   }
-
-  void bottom
 }
 
-function renderCta(
-  ctx: SKRSContext2D,
-  slide: SlideContent,
-  headerBottom: number,
-  handle: string,
-  dc: SlideDesignCtx,
-) {
-  const { top, height } = contentBounds(headerBottom, dc)
+// CTA — no image, solid peacock. Saffron headline + follow handle.
+function renderCta(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx, handle: string) {
+  ctx.fillStyle = BEAUTIFIO.primary
+  ctx.fillRect(0, 0, dc.W, dc.H)
+
   const cx = dc.W / 2
+  const contentW = dc.W - PAD_X * 2
 
   const fitted = fitText(ctx, slide.text || '', {
     weight: WEIGHT.bold,
-    startSize: 46,
-    minSize: 22,
-    maxWidth: CONTENT_W,
-    maxHeight: height - 200,
-    lineHeightRatio: 1.3,
-    family: dc.headingFont,
+    startSize: 56,
+    minSize: 40,
+    maxWidth: contentW,
+    maxHeight: dc.H * 0.42,
+    lineHeightRatio: 1.2,
+    family: FONT,
   })
 
-  const handleSize = 26
-
-  ctx.font = font(WEIGHT.semibold, handleSize, dc.headingFont)
+  const handleSize = 28
   const handleH = handleSize * 1.3
-
+  const lineGap = 52
   const textH = fitted.lines.length * fitted.lineHeight
-  const totalH = textH + 60 + handleH
-  let y = top + Math.max(0, (height - totalH) / 2)
+  const totalH = 4 + lineGap + textH + 56 + handleH
+  let y = Math.max(PAD_TOP, (dc.H - totalH) / 2)
 
-  // Main punchy line — pixel accent.
-  ctx.fillStyle = dc.colors.accent
-  ctx.font = font(WEIGHT.bold, fitted.size, dc.headingFont)
+  // Thin decorative line above the text — saffron.
+  ctx.strokeStyle = BEAUTIFIO.accent
+  ctx.lineWidth = 4
+  ctx.beginPath()
+  ctx.moveTo(cx - 70, y)
+  ctx.lineTo(cx + 70, y)
+  ctx.stroke()
+  y += lineGap
+
+  // CTA headline.
+  ctx.fillStyle = BEAUTIFIO.accent
+  ctx.font = font(WEIGHT.bold, fitted.size, FONT)
   y = drawLines(ctx, fitted.lines, cx, y, fitted.lineHeight, 'center')
-  y += 60
+  y += 56
 
-  // "Follow @handle" — the last slide's only branding.
-  ctx.fillStyle = dc.colors.white
-  ctx.font = font(WEIGHT.semibold, handleSize, dc.headingFont)
+  // Follow @handle.
+  ctx.fillStyle = BEAUTIFIO.white
+  ctx.font = font(WEIGHT.semibold, handleSize, FONT)
   ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
   ctx.fillText(`Follow ${handle || ''}`.trim(), cx, y + handleSize * 0.85)
 }
 
-function renderFallback(ctx: SKRSContext2D, slide: SlideContent, headerBottom: number, dc: SlideDesignCtx) {
-  const { top, height } = contentBounds(headerBottom, dc)
+async function renderFlexible(
+  ctx: SKRSContext2D, slide: any, dc: SlideDesignCtx, handle?: string
+) {
+  const imgPos = (slide as any).imagePosition || 'top'
+  const imgPct = ((slide as any).imagePercent || 50) / 100
+  const textPos = (slide as any).textPosition || 'bottom'
+
+  // Solid background
+  ctx.fillStyle = BEAUTIFIO.primary
+  ctx.fillRect(0, 0, dc.W, dc.H)
+
+  // Image area
+  const img = await loadSlideImage(slide)
+  if (img && imgPos !== 'none') {
+    if (imgPos === 'top') {
+      const imgH = Math.round(dc.H * imgPct)
+      drawImageTop(ctx, img, dc.W, imgH)
+    } else if (imgPos === 'full') {
+      drawImageFull(ctx, img, dc.W, dc.H)
+      ctx.fillStyle = 'rgba(8, 68, 99, 0.55)'
+      ctx.fillRect(0, 0, dc.W, dc.H)
+    } else if (imgPos === 'left') {
+      const imgW = Math.round(dc.W * imgPct)
+      drawImageLeft(ctx, img, imgW, dc.H)
+    } else if (imgPos === 'right') {
+      const imgW = Math.round(dc.W * imgPct)
+      drawImageRight(ctx, img, imgW, dc.H)
+    }
+  }
+
+  // Text area — position based on textPosition
+  const contentW = dc.W - PAD_X * 2
+  let y
+
+  if (imgPos === 'top') {
+    const imgH = Math.round(dc.H * imgPct)
+    y = imgH + 56
+  } else if (imgPos === 'left' || imgPos === 'right') {
+    y = PAD_TOP
+  } else if (imgPos === 'full') {
+    // Text centered on dark overlay
+    y = Math.round(dc.H * 0.3)
+  } else {
+    y = PAD_TOP
+  }
+
+  // Title
+  if (slide.title) {
+    const fitted = fitText(ctx, slide.title, {
+      weight: WEIGHT.semibold, startSize: 52, minSize: 36,
+      maxWidth: contentW, maxHeight: 260, lineHeightRatio: 1.2, family: FONT,
+    })
+    ctx.fillStyle = BEAUTIFIO.accent
+    ctx.font = font(WEIGHT.semibold, fitted.size, FONT)
+    y = drawLines(ctx, fitted.lines, PAD_X, y, fitted.lineHeight, 'left') + 36
+  }
+
+  // Subtitle
+  if (slide.subtitle) {
+    ctx.fillStyle = BEAUTIFIO.white
+    ctx.font = font(WEIGHT.regular, 30, FONT)
+    const subLines = wrapText(ctx, slide.subtitle, contentW)
+    y = drawLines(ctx, subLines, PAD_X, y, 30 * 1.25, 'left') + 32
+  }
+
+  // Bullets
+  if (slide.bullets?.length) {
+    const bottom = dc.H - 80
+    const textX = PAD_X + 40
+    let bulletSize = 28
+    ctx.font = font(WEIGHT.regular, bulletSize, FONT)
+    while (bulletSize > 22) {
+      let total = 0
+      for (const b of slide.bullets) {
+        const lines = wrapText(ctx, b, contentW - 40)
+        total += lines.length * bulletSize * 1.3 + bulletSize * 0.5
+      }
+      if (y + total <= bottom) break
+      bulletSize -= 2
+      ctx.font = font(WEIGHT.regular, bulletSize, FONT)
+    }
+    const lh = bulletSize * 1.3
+    for (const b of slide.bullets) {
+      ctx.fillStyle = BEAUTIFIO.accent
+      const sq = Math.max(8, bulletSize * 0.4)
+      ctx.fillRect(PAD_X, y + lh * 0.5 - sq / 2, sq, sq)
+      ctx.fillStyle = BEAUTIFIO.white
+      ctx.font = font(WEIGHT.regular, bulletSize, FONT)
+      const lines = wrapText(ctx, b, contentW - 40)
+      y = drawLines(ctx, lines, textX, y, lh, 'left')
+      y += bulletSize * 0.5
+    }
+  }
+
+  // Text-only (quote, cta style)
+  if (slide.text && !slide.bullets?.length) {
+    const fitted = fitText(ctx, slide.text, {
+      weight: WEIGHT.bold, startSize: 56, minSize: 40,
+      maxWidth: contentW, maxHeight: dc.H * 0.5, lineHeightRatio: 1.25, family: FONT,
+    })
+    ctx.fillStyle = BEAUTIFIO.accent
+    ctx.font = font(WEIGHT.bold, fitted.size, FONT)
+    const textH = fitted.lines.length * fitted.lineHeight
+    const textY = Math.max(y, (dc.H - textH) / 2)
+    drawLines(ctx, fitted.lines, dc.W / 2, textY, fitted.lineHeight, 'center')
+  }
+
+  // Footer handle
+  if (handle) {
+    ctx.fillStyle = BEAUTIFIO.muted
+    ctx.font = font(WEIGHT.regular, 20, FONT)
+    ctx.textAlign = 'right'
+    ctx.fillText(handle, dc.W - PAD_X, dc.H - 36)
+  }
+}
+
+// PROFILE — image top 45%, solid peacock block below. One slide per person/item.
+async function renderProfile(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx) {
+  ctx.fillStyle = BEAUTIFIO.primary
+  ctx.fillRect(0, 0, dc.W, dc.H)
+  const imgH = Math.round(dc.H * 0.45)
+  const img = await loadSlideImage(slide)
+  if (img) drawImageTop(ctx, img, dc.W, imgH)
+  const contentW = dc.W - PAD_X * 2
+  const bullets = slide.bullets || []
+  let totalH = 0
+  const titleSize = 56
+  ctx.font = font(WEIGHT.bold, titleSize, FONT)
+  const titleLines = wrapText(ctx, slide.title || '', contentW)
+  totalH += titleLines.length * (titleSize * 1.2) + 24
+  const bulletSize = bullets.length <= 2 ? 30 : 28
+  const bulletLH = bulletSize * 1.45
+  for (const b of bullets) { ctx.font = font(WEIGHT.regular, bulletSize, FONT); totalH += wrapText(ctx, b, contentW - 48).length * bulletLH + 12 }
+  const margin = 60; const availH = (dc.H - imgH) - margin * 2
+  let y = imgH + margin + Math.max(0, (availH - totalH) / 2)
+  ctx.fillStyle = BEAUTIFIO.accent; ctx.font = font(WEIGHT.bold, titleSize, FONT)
+  y = drawLines(ctx, titleLines, PAD_X, y, titleSize * 1.2, 'left') + 24
+  for (const b of bullets) {
+    ctx.font = font(WEIGHT.regular, bulletSize, FONT); const lines = wrapText(ctx, b, contentW - 48)
+    ctx.fillStyle = BEAUTIFIO.accent; ctx.fillRect(PAD_X, y + bulletLH * 0.5 - 5, 10, 10)
+    ctx.fillStyle = BEAUTIFIO.white; drawLines(ctx, lines, PAD_X + 40, y, bulletLH, 'left')
+    y += lines.length * bulletLH + 12
+  }
+  ctx.fillStyle = BEAUTIFIO.muted; ctx.font = font(WEIGHT.regular, 20, FONT); ctx.textAlign = 'right'
+  ctx.fillText('@beautifio.space', dc.W - PAD_X, dc.H - 40); ctx.textAlign = 'left'
+}
+
+function renderFallback(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx) {
+  ctx.fillStyle = BEAUTIFIO.primary
+  ctx.fillRect(0, 0, dc.W, dc.H)
   const text = slide.title || slide.text || slide.tag || ''
   const fitted = fitText(ctx, text, {
     weight: WEIGHT.bold,
-    startSize: 48,
-    minSize: 20,
-    maxWidth: CONTENT_W,
-    maxHeight: height,
-    lineHeightRatio: 1.3,
-    family: dc.headingFont,
+    startSize: 56,
+    minSize: 32,
+    maxWidth: dc.W - PAD_X * 2,
+    maxHeight: dc.H - PAD_TOP * 2,
+    lineHeightRatio: 1.2,
+    family: FONT,
   })
   const blockH = fitted.lines.length * fitted.lineHeight
-  const y = top + Math.max(0, (height - blockH) / 2)
-  ctx.fillStyle = dc.colors.accent
-  ctx.font = font(WEIGHT.bold, fitted.size, dc.headingFont)
+  const y = Math.max(PAD_TOP, (dc.H - blockH) / 2)
+  ctx.fillStyle = BEAUTIFIO.accent
+  ctx.font = font(WEIGHT.bold, fitted.size, FONT)
   drawLines(ctx, fitted.lines, dc.W / 2, y, fitted.lineHeight, 'center')
 }
 
@@ -746,103 +872,93 @@ export async function renderSlide(
 
   const dW = opts.design?.width ?? W
   const dH = opts.design?.height ?? H
-  const dColors = { ...COLORS }
-  if (opts.design?.bgColor) dColors.bg = opts.design.bgColor
-  if (opts.design?.accentColor) dColors.accent = opts.design.accentColor
-  if (opts.design?.accent2Color) dColors.accent2 = opts.design.accent2Color
-  if (opts.design?.textColor) dColors.white = opts.design.textColor
-  if (opts.design?.mutedColor) dColors.muted = opts.design.mutedColor
-  if ((slide as any).palette) {
-    const p = (slide as any).palette
-    if (p.primary) dColors.accent = p.primary
-    if (p.accent) dColors.accent2 = p.accent
+  // Colors are HARD LOCKED to the brand — design color overrides are ignored.
+  const dc: SlideDesignCtx = {
+    W: dW,
+    H: dH,
+    colors: COLORS,
+    headingFont: FONT,
+    bodyFont: FONT,
+    logoUrl: opts.design?.logoUrl,
+    logoPosition: opts.design?.logoPosition,
   }
-  const dHeadingFont = opts.design?.headingFont || FONT_PIXEL
-  const dBodyFont = opts.design?.bodyFont || FONT_BODY
-  const ctx: SlideDesignCtx = { W: dW, H: dH, colors: dColors, headingFont: dHeadingFont, bodyFont: dBodyFont, logoUrl: opts.design?.logoUrl, logoPosition: opts.design?.logoPosition }
 
   const canvas = createCanvas(dW, dH)
   const ctx2d = canvas.getContext('2d') as unknown as SKRSContext2D
 
-  const isFirst = opts.index === 0
-  const isLast = opts.index === opts.total - 1
+  // 1. Solid cloud-white base. Renderers paint their own solid blocks on top.
+  drawBackground(ctx2d, dc)
 
-  // 1. Background image + scrims. Cover stays vivid/high-contrast (light scrim).
-  await drawBackground(ctx2d, slide, { light: slide.type === 'cover' }, ctx)
-
-  // 2. Header tag pill (removed — no-op).
-  const headerBottom = drawHeader(ctx2d, slide.tag)
-
-  // 3. Body per slide type.
-  switch (slide.type) {
+  // 2. Body per slide type — flexible render for reference-driven slides
+  if ((slide as any).layout && (slide as any).imagePosition) {
+    await renderFlexible(ctx2d, slide, dc, opts.handle)
+  } else switch (slide.type) {
     case 'cover':
-      renderCover(ctx2d, slide, headerBottom, ctx)
+      await renderCover(ctx2d, slide, dc, opts.handle)
+      break
+    case 'profile':
+      await renderProfile(ctx2d, slide, dc)
       break
     case 'bullets':
-      renderBullets(ctx2d, slide, headerBottom, ctx)
+      await renderBullets(ctx2d, slide, dc)
       break
     case 'stat':
-      renderStat(ctx2d, slide, headerBottom, ctx)
+      renderStat(ctx2d, slide, dc)
       break
     case 'grid4':
-      renderGrid4(ctx2d, slide, headerBottom, ctx)
+      renderGrid4(ctx2d, slide, dc)
       break
     case 'quote':
-      renderQuote(ctx2d, slide, headerBottom, ctx)
+      await renderQuote(ctx2d, slide, dc)
       break
     case 'cta':
-      renderCta(ctx2d, slide, headerBottom, opts.handle, ctx)
+      renderCta(ctx2d, slide, dc, opts.handle)
       break
     default:
-      renderFallback(ctx2d, slide, headerBottom, ctx)
+      renderFallback(ctx2d, slide, dc)
       break
   }
 
-  // 3.5 Logo watermark (above body, semi-transparent).
-  await drawLogo(ctx2d, ctx)
+  // 3. Logo watermark.
+  await drawLogo(ctx2d, dc)
 
-  // 4. Footer handle — first slide only (last slide brands via CTA body).
-  drawFooter(ctx2d, opts.handle, isFirst && !isLast, ctx)
-
-  // 5. Encode and write.
+  // 4. Encode and write.
   const outputPath = path.join(TMP, `slide-${uuid()}.png`)
   const png = canvas.toBuffer('image/png')
   fs.writeFileSync(outputPath, png)
   return outputPath
 }
 
-// Transparent 1080x1350 overlay (short caption at top) to burn onto the video
-// carousel slide with ffmpeg. Text sits over a soft top scrim; the rest is
-// transparent so the video shows through.
+// Transparent overlay (short caption at top) to burn onto the video carousel
+// slide with ffmpeg. Text sits over a soft peacock top scrim; rest transparent.
 export async function renderVideoOverlay(
   text: string,
   opts: { handle?: string } = {},
 ): Promise<string> {
+  void opts
   registerFonts()
   const canvas = createCanvas(W, H)
   const ctx = canvas.getContext('2d') as unknown as SKRSContext2D
 
-  // Soft top scrim for legibility (transparent elsewhere).
   const topEnd = H * 0.36
   const g = ctx.createLinearGradient(0, 0, 0, topEnd)
-  g.addColorStop(0, 'rgba(8,8,10,0.88)')
-  g.addColorStop(0.7, 'rgba(8,8,10,0.5)')
-  g.addColorStop(1, 'rgba(8,8,10,0)')
+  g.addColorStop(0, 'rgba(8,68,99,0.9)')
+  g.addColorStop(0.7, 'rgba(8,68,99,0.5)')
+  g.addColorStop(1, 'rgba(8,68,99,0)')
   ctx.fillStyle = g
   ctx.fillRect(0, 0, W, topEnd)
 
-  // Caption heading near the top — pixel accent.
   const fitted = fitText(ctx, text || '', {
     weight: WEIGHT.bold,
-    startSize: 34,
-    minSize: 18,
-    maxWidth: CONTENT_W,
+    startSize: 48,
+    minSize: 28,
+    maxWidth: W - PAD_X * 2,
     maxHeight: 280,
-    lineHeightRatio: 1.3,
-    family: FONT_PIXEL,
+    lineHeightRatio: 1.2,
+    family: FONT,
   })
-  ctx.fillStyle = COLORS.accent
-  ctx.font = font(WEIGHT.bold, fitted.size, FONT_PIXEL)
+  ctx.fillStyle = BEAUTIFIO.accent
+  ctx.font = font(WEIGHT.bold, fitted.size, FONT)
   drawLines(ctx, fitted.lines, PAD_X, PAD_TOP + 6, fitted.lineHeight, 'left')
 
   const outputPath = path.join(TMP, `voverlay-${uuid()}.png`)
@@ -860,32 +976,30 @@ export async function renderScreenshotSlide(
   const canvas = createCanvas(W, H)
   const ctx = canvas.getContext('2d') as unknown as SKRSContext2D
 
-  ctx.fillStyle = COLORS.bg
+  ctx.fillStyle = BEAUTIFIO.primary
   ctx.fillRect(0, 0, W, H)
 
-  // Explanation heading at the top.
   const top = 110
   let textBottom = top
   if (text) {
     const fitted = fitText(ctx, text, {
-      weight: WEIGHT.bold,
-      startSize: 32,
-      minSize: 18,
-      maxWidth: CONTENT_W,
+      weight: WEIGHT.semibold,
+      startSize: 44,
+      minSize: 26,
+      maxWidth: W - PAD_X * 2,
       maxHeight: 240,
-      lineHeightRatio: 1.3,
-      family: FONT_PIXEL,
+      lineHeightRatio: 1.2,
+      family: FONT,
     })
-    ctx.fillStyle = COLORS.accent
-    ctx.font = font(WEIGHT.bold, fitted.size, FONT_PIXEL)
+    ctx.fillStyle = BEAUTIFIO.accent
+    ctx.font = font(WEIGHT.semibold, fitted.size, FONT)
     textBottom = drawLines(ctx, fitted.lines, PAD_X, top, fitted.lineHeight, 'left')
   }
 
-  // Framed screenshot below the text (contained, never cropped).
   const cardTop = textBottom + 56
   const cardBottom = H - 110
   const boxX = PAD_X
-  const boxW = CONTENT_W
+  const boxW = W - PAD_X * 2
   const boxH = Math.max(200, cardBottom - cardTop)
 
   try {
@@ -896,25 +1010,22 @@ export async function renderScreenshotSlide(
     const dx = boxX + (boxW - dw) / 2
     const dy = cardTop + (boxH - dh) / 2
 
-    // Card backing behind the image.
-    ctx.fillStyle = '#111111'
-    roundRectPath(ctx, dx - 16, dy - 16, dw + 32, dh + 32, 8)
+    ctx.fillStyle = BEAUTIFIO.dark
+    roundRectPath(ctx, dx - 16, dy - 16, dw + 32, dh + 32, 12)
     ctx.fill()
 
-    // Rounded-clipped image.
     ctx.save()
-    roundRectPath(ctx, dx, dy, dw, dh, 4)
+    roundRectPath(ctx, dx, dy, dw, dh, 8)
     ctx.clip()
     ctx.drawImage(img, dx, dy, dw, dh)
     ctx.restore()
 
-    // Neon arcade border.
-    ctx.strokeStyle = COLORS.accent
+    ctx.strokeStyle = BEAUTIFIO.accent
     ctx.lineWidth = 4
-    roundRectPath(ctx, dx, dy, dw, dh, 4)
+    roundRectPath(ctx, dx, dy, dw, dh, 8)
     ctx.stroke()
   } catch {
-    /* if the upload can't be read, just leave the dark slide with the text */
+    /* if the upload can't be read, just leave the peacock slide with the text */
   }
 
   const outputPath = path.join(TMP, `slide-${uuid()}.png`)

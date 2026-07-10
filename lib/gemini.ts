@@ -2,8 +2,40 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import fs from 'fs'
 import { SlideContent } from './types'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+// Multi-key rotation — avoid 429/503 quota by cycling through backup keys
+const KEY_1 = process.env.GEMINI_API_KEY!
+let _currentKeyIndex = 0
+function getKey(): string {
+  const keys = [
+    KEY_1,
+    process.env.GEMINI_API_KEY_2 || '',
+    process.env.GEMINI_API_KEY_3 || '',
+  ].filter(Boolean)
+  if (keys.length === 0) throw new Error('No Gemini API keys configured')
+  return keys[_currentKeyIndex % keys.length]
+}
+function rotateKey(): void { _currentKeyIndex++ }
+
+function genModel(): import('@google/generative-ai').GenerativeModel {
+  const genAI = new GoogleGenerativeAI(getKey())
+  return genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+}
+
+// Retry on 429/503 with exponential backoff AND key rotation
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try { return await fn() }
+    catch (e: any) {
+      const msg = String(e?.message || e?.status || '')
+      const isRateLimit = msg.includes('429') || msg.includes('503')
+      if (!isRateLimit || attempt === maxRetries - 1) throw e
+      rotateKey()
+      const delay = Math.min(2000 * (2 ** attempt) + Math.random() * 1000, 15000)
+      await new Promise(r => setTimeout(r, delay))
+    }
+  }
+  throw new Error('Retry exhausted')
+}
 
 const PROMPT = `Kamu content creator Instagram profesional untuk akun berita/edukasi AI modern (teks tegas & informatif, visual sinematik).
 Analisis input (video/gambar/teks/link) dan buat data slide carousel.
@@ -109,7 +141,7 @@ export async function analyzeContent(input: {
 
   parts.push({ text: input.text ? `Content:\n${input.text}\n\nGenerate carousel. Raw JSON only.` : 'Generate carousel from the media above. Raw JSON only.' })
 
-  const result = await model.generateContent(parts)
+  const result = await withRetry(() => genModel().generateContent(parts))
   let raw = result.response.text().trim().replace(/```json|```/gi, '').trim()
   const f = raw.indexOf('{'), l = raw.lastIndexOf('}')
   raw = raw.substring(f, l + 1)

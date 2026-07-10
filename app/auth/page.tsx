@@ -123,7 +123,7 @@ function AuthForm() {
         input::placeholder { color:#666666; }
       `}</style>
 
-      <header style={{ position:'sticky',top:0,zIndex:20,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',background:'rgba(13,13,20,0.92)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(255,255,255,0.06)',maxWidth:760,margin:'0 auto' }}>
+      <header style={{ position:'sticky',top:0,zIndex:20,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',background:'rgba(250,250,248,0.94)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(0,0,0,0.08)',maxWidth:760,margin:'0 auto' }}>
         <Link href="/" style={{display:'flex',alignItems:'center',gap:10,textDecoration:'none'}}>
           <span style={{width:6,height:6,background:L,display:'inline-block'}} />
           {brandLogoUrl ? <img src={brandLogoUrl} style={{height:24}} /> : <span className="pixel" style={{fontSize:10,color:L}}>publisio</span>}

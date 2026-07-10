@@ -6,6 +6,8 @@ import { renderSlide, renderVideoOverlay, renderScreenshotSlide } from '@/lib/re
 import { downloadVideo, isVideoUrl } from '@/lib/ytdlp'
 import { fetchLinkContent } from '@/lib/scrape'
 import { extractAssets } from '@/lib/asset-extractor'
+import { analyzeReferenceSlides } from '@/lib/analyze-reference'
+import { scrapeIGCarousel } from '@/lib/scrape-ig-carousel'
 import { processVideo } from '@/lib/ffmpeg'
 import { publishFile } from '@/lib/storage'
 import { CATEGORY_PALETTES, CATEGORY_KEYWORDS } from '@/lib/category-palette'
@@ -24,7 +26,7 @@ const RATIO_PRESETS: Record<string, { width: number; height: number; label: stri
   '1:1':  { width: 1080, height: 1080, label: 'Square 1:1 composition' },
   '16:9': { width: 1920, height: 1080, label: 'Horizontal 16:9 widescreen composition' },
 }
-const VALID_TYPES = ['cover', 'bullets', 'stat', 'grid4', 'quote', 'cta']
+const VALID_TYPES = ['cover', 'profile', 'bullets', 'stat', 'grid4', 'quote', 'cta']
 const SB_URL = process.env.SUPABASE_URL
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY
 
@@ -95,6 +97,24 @@ export async function POST(req: NextRequest) {
         const aspectRatio = body.aspectRatio || '4:5'
         const ratioPreset = RATIO_PRESETS[aspectRatio] || RATIO_PRESETS['4:5']
 
+        // Reference analysis — clone layout from uploaded screenshots
+        let referenceAnalysis: any = null
+        const refScreenshots = body.refScreenshots || []
+        if (refScreenshots.length > 0) {
+          send(controller, { type: 'step', step: 'reference', pct: 5, label: 'Menganalisis format referensi...' })
+          referenceAnalysis = await analyzeReferenceSlides(refScreenshots)
+        }
+
+        // Auto-scrape IG carousel if no manual ref screenshots but URL provided
+        const referenceUrl = body.referenceUrl || ''
+        if (refScreenshots.length === 0 && referenceUrl.includes('instagram.com')) {
+          send(controller, { type: 'step', step: 'reference', pct: 5, label: 'Scraping Instagram carousel...' })
+          const scrapedScreenshots = await scrapeIGCarousel(referenceUrl)
+          if (scrapedScreenshots.length > 0) {
+            referenceAnalysis = await analyzeReferenceSlides(scrapedScreenshots)
+          }
+        }
+
         send(controller, { type: 'step', step: 'preparing', pct: 5 })
 
         let videoPath: string | undefined
@@ -131,10 +151,13 @@ export async function POST(req: NextRequest) {
         }
 
         // Asset extraction (source-first mode)
-        let extractedAssets: Array<{type:string;url:string;localPath?:string;caption?:string;source:string;priority:number}> = []
+        let extractedAssets: Array<{type:string;url:string;localPath?:string;caption?:string;context?:string;source:string;priority:number}> = []
         if (contentMode !== 'full-ai' && body.url) {
           send(controller, { type: 'step', step: 'extracting', pct: 7, label: 'Extracting assets...' })
           try { extractedAssets = await extractAssets(body.url) } catch(e) { console.error('Asset extraction failed:', e) }
+          if (contentMode === 'source-first' && extractedAssets.length === 0) {
+            send(controller, { type: 'warning', message: 'Tidak ada gambar ditemukan di halaman ini. Menggunakan ilustrasi otomatis.' })
+          }
         }
 
         let imageBase64 = body.imageBase64
@@ -177,28 +200,59 @@ export async function POST(req: NextRequest) {
         const finalPrompt = (customPromptExt || '').replace(/\{\{HANDLE\}\}/g, handle || HANDLE)
 
         let customPromptForAnalysis = finalPrompt
+
+        // Reference-driven prompt — REPLACE template entirely with cloned layout
+        if (referenceAnalysis) {
+          console.log('[ROUTE] Reference analysis slideCount:', referenceAnalysis.slideCount)
+          console.log('[ROUTE] Prompt starts with:', (customPromptForAnalysis || '').substring(0, 100))
+          const refInstruction = `
+KAMU HARUS MENIRU FORMAT CAROUSEL REFERENSI INI:
+
+${JSON.stringify(referenceAnalysis, null, 2)}
+
+ATURAN PENTING:
+- Buat TEPAT ${referenceAnalysis.slideCount} slide
+- Setiap slide MENIRU layout slide referensi di posisi yang sama (slide 1 = slide 1)
+- Untuk setiap slide, IKUTI: type, layout, textPosition, imagePosition dari referensi
+- KONTEN diambil dari sumber yang diberikan, ditulis ulang dengan gaya Beautifio
+- Semua teks BAHASA INDONESIA
+
+Untuk setiap slide output JSON, WAJIB sertakan field:
+- "layout": deskripsi layout (sama seperti referensi)
+- "imagePosition": "top" | "full" | "left" | "right" | "none"
+- "imagePercent": angka 0-100, persen area gambar
+- "textPosition": "bottom" | "center" | "top" | "left" | "right"
+
+JANGAN gunakan template fixed (cover/bullets/stat/grid4/quote/cta) — gunakan type yang SESUAI REFERENSI.
+`
+          customPromptForAnalysis = refInstruction
+        }
+
         if (contentMode === 'source-first' && extractedAssets.length > 0) {
-          const assetList = extractedAssets.slice(0, 10).map((a, i) => `[${i}] ${a.type} - ${a.source} - ${a.caption || 'no caption'}`).join('\n')
+          const assetList = extractedAssets.slice(0, 12).map((a, i) => `[${i}] ${a.type} - ${a.source} - ${a.caption || a.context || 'no caption'}`).join('\n')
           const assetInstruction = `
-AVAILABLE SOURCE ASSETS:
+AVAILABLE SOURCE ASSETS (caption/name context included):
 ${assetList}
 
 CRITICAL INSTRUCTION — ASSET USAGE:
-- PRIORITASKAN penggunaan aset sumber untuk setiap slide yang relevan.
-- Untuk SETIAP slide, cek apakah ada aset dari daftar yang COCOK dengan topik slide tersebut.
-- Set assetSource = "original" sebanyak mungkin — targetkan SEMUA slide cover dan bullets memakai aset.
-- HANYA gunakan assetSource = "generate" jika BENAR-BENAR TIDAK ADA aset sumber yang relevan untuk slide tersebut.
+- PRIORITASKAN penggunaan aset sumber untuk SETIAP slide yang relevan.
+- Jika artikel berupa LISTICLE: buat SATU SLIDE PER ITEM, assign foto item tersebut (assetSource: "original", originalAssetIndex: N).
+- Gunakan caption/context untuk mencocokkan foto ke slide yang tepat (misal: foto dengan caption "Tori Penso" → slide yang membahas Tori Penso).
+- Set assetSource = "original" sebanyak mungkin — targetkan SEMUA slide utama memakai aset.
+- HANYA gunakan assetSource = "generate" jika BENAR-BENAR TIDAK ADA aset sumber yang relevan.
 - Untuk setiap slide, include:
   - "assetSource": "original" atau "generate"
   - "originalAssetIndex": nomor index aset dari daftar (hanya jika assetSource = "original")
   - "imagePrompt": selalu sertakan (sebagai fallback jika assetSource = "original" sekalipun)
 `
-          customPromptForAnalysis = (finalPrompt || '') + assetInstruction
+          customPromptForAnalysis = (customPromptForAnalysis || '') + '\n\n' + assetInstruction
         }
 
         const analysis = await analyzeContent({ text: extraText || body.url, videoPath, imageBase64, imageMimeType, customPrompt: customPromptForAnalysis || undefined })
-        // Filter unknown slide types to prevent render errors
-        analysis.slides = analysis.slides.filter(s => VALID_TYPES.includes(s.type))
+        // Filter unknown slide types (skip filter for reference-driven)
+        if (!referenceAnalysis) {
+          analysis.slides = analysis.slides.filter(s => VALID_TYPES.includes(s.type))
+        }
         // Apply category color palette per slide
         for (const slide of analysis.slides) {
           const tag = stripMd((slide as any).tag || '')
@@ -228,6 +282,21 @@ CRITICAL INSTRUCTION — ASSET USAGE:
           if (!slide.imagePrompt && !(slide.assetSource === 'original' && slide.originalAssetIndex !== undefined)) { slidesWithImages.push(slide); continue }
 
           const basePct = 20 + Math.round((i / total) * 60)
+
+          // Slide types that don't need AI background images — the renderer
+          // paints a solid brand background instead. Skip AI generation to save
+          // API calls and keep the output cleaner.
+          const NO_IMAGE_TYPES = ['stat', 'grid4', 'quote', 'cta']
+          if (NO_IMAGE_TYPES.includes(slide.type as string)) {
+            send(controller, { type: 'step', step: 'images', pct: basePct, current: i + 1, total, label: `Slide ${i + 1}/${total} (solid bg)...` })
+            try {
+              const renderedPath = await renderSlide({ ...slide }, { index: i, total, handle, ...slideDesign })
+              slidesWithImages.push({ ...slide, imagePath: renderedPath, imageUrl: await publishFile(renderedPath), assetSource: 'none' })
+            } catch {
+              slidesWithImages.push(slide)
+            }
+            continue
+          }
 
           // Source-first: use extracted asset if available
           const slideWithAsset = slide.assetSource === 'original' && slide.originalAssetIndex !== undefined
@@ -306,7 +375,13 @@ CRITICAL INSTRUCTION — ASSET USAGE:
         })
         controller.close()
       } catch (err: any) {
-        send(controller, { type: 'error', error: err.message || 'Generation failed' })
+        let msg = err.message || 'Generation failed'
+        if (msg.includes('429') || msg.includes('503') || msg.includes('quota') || msg.includes('exceeded') || msg.includes('keys exhausted')) {
+          msg = 'Server sedang sibuk. Coba lagi dalam 1-2 menit ya.'
+        } else if (msg.includes('Gemini') || msg.includes('GoogleGenerativeAI') || msg.includes('fetch') || msg.includes('ENOENT') || msg.includes('ffmpeg') || msg.includes('yt-dlp')) {
+          msg = 'Gangguan teknis. Tim kami sedang menanganinya.'
+        }
+        send(controller, { type: 'error', error: msg })
         controller.close()
       }
     }

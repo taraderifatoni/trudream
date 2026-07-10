@@ -1,4 +1,4 @@
-export type SlideType = 'cover' | 'bullets' | 'stat' | 'grid4' | 'quote' | 'cta' | 'screenshot'
+export type SlideType = 'cover' | 'profile' | 'bullets' | 'stat' | 'grid4' | 'quote' | 'cta' | 'screenshot'
 
 export interface SlideContent {
   type: SlideType
@@ -14,6 +14,9 @@ export interface SlideContent {
   imagePrompt: string
   imagePath?: string
   imageUrl?: string
+  layout?: string
+  imagePosition?: string
+  imagePercent?: number
 }
 
 export interface VideoSlide {
