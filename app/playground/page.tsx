@@ -80,23 +80,23 @@ interface PublishResponse {
 /* ============================ Design tokens ============================ */
 
 const C = {
-  lime: '#CDF22B',
-  blue: '#1E45FB',
-  black: '#1a1a1a',
+  lime: '#01C38D',  // mint green
+  blue: '#132D46',  // dark teal
+  black: '#191E29',
   white: '#FFFFFF',
-  dark: '#F5F5F0',
-  gray: '#6b6b6b',
-  screen: '#FFFFFF',
+  dark: '#191E29',
+  gray: '#696E79',
+  screen: '#132D46',
   // Aliases used by shared preview atoms (SlideContent, Spinner, Radio, Checkbox)
-  accent: '#CDF22B',
-  accentText: '#1a1a1a',
-  text: '#1a1a1a',
-  muted: '#6b6b6b',
-  border: '#e0e0d8',
-  surface: '#FFFFFF',
-  surface2: '#F0F0E8',
-  success: '#2D5016',
-  error: '#dc2626',
+  accent: '#01C38D',
+  accentText: '#191E29',
+  text: '#FFFFFF',
+  muted: '#696E79',
+  border: '#2a3548',
+  surface: '#132D46',
+  surface2: '#1a2d3d',
+  success: '#01C38D',
+  error: '#ef4444',
 }
 
   const VIDEO_HOSTS = [
@@ -367,9 +367,10 @@ export default function Page() {
       const at = p.get('access_token');
       const rt = p.get('refresh_token');
       if (at) {
-        const exp = new Date(Date.now() + 3600 * 1000).toUTCString();
-        document.cookie = `sb-access-token=${at}; expires=${exp}; path=/; SameSite=Lax`
-        if (rt) document.cookie = `sb-refresh-token=${rt}; expires=${exp}; path=/; SameSite=Lax`
+        const accessExp = new Date(Date.now() + 3600 * 1000).toUTCString();
+        const longExp   = new Date(Date.now() + 30 * 24 * 3600 * 1000).toUTCString();
+        document.cookie = `sb-access-token=${at}; expires=${accessExp}; path=/; SameSite=Lax`
+        if (rt) document.cookie = `sb-refresh-token=${rt}; expires=${longExp}; path=/; SameSite=Lax`
         // Fetch user info from token using Supabase API
         const UA = navigator.userAgent || ''
         fetch(`${SUPABASE_URL}/auth/v1/user`, {
@@ -379,15 +380,44 @@ export default function Page() {
           }
         }).then(r => r.json()).then(u => {
           if (u.email) {
-            document.cookie = `sb-user=${JSON.stringify({email: u.email})}; expires=${exp}; path=/; SameSite=Lax`
+            document.cookie = `sb-user=${encodeURIComponent(JSON.stringify({email: u.email}))}; expires=${longExp}; path=/; SameSite=Lax`
             setUser({email: u.email})
           }
         })
         // Clean URL
         window.history.replaceState(null, '', '/playground')
+        return
       }
     }
-    setUser(getUserFromCookie());
+
+    // If sb-access-token expired but sb-refresh-token still valid, silently refresh
+    const sbUser = document.cookie.split('; ').find(r => r.startsWith('sb-user='))
+    const sbAccess = document.cookie.split('; ').find(r => r.startsWith('sb-access-token='))
+    const sbRefresh = document.cookie.split('; ').find(r => r.startsWith('sb-refresh-token='))
+    if (sbUser) {
+      // User cookie still valid — set user immediately
+      try {
+        setUser(JSON.parse(decodeURIComponent(sbUser.split('=').slice(1).join('='))))
+      } catch { setUser(null) }
+      // If access token is gone but refresh exists, silently refresh in background
+      if (!sbAccess && sbRefresh) {
+        const rt = decodeURIComponent(sbRefresh.split('=').slice(1).join('='))
+        fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+          method: 'POST',
+          headers: { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: rt }),
+        }).then(r => r.json()).then(d => {
+          if (d.access_token) {
+            const accessExp = new Date(Date.now() + (d.expires_in || 3600) * 1000).toUTCString()
+            const longExp   = new Date(Date.now() + 30 * 24 * 3600 * 1000).toUTCString()
+            document.cookie = `sb-access-token=${d.access_token}; expires=${accessExp}; path=/; SameSite=Lax`
+            if (d.refresh_token) document.cookie = `sb-refresh-token=${d.refresh_token}; expires=${longExp}; path=/; SameSite=Lax`
+          }
+        }).catch(() => {/* silent fail — user still logged in via sb-user */})
+      }
+    } else {
+      setUser(null)
+    }
   }, []);
   useEffect(() => { fetch('/api/brand').then(r=>r.json()).then(d=>setBrandLogoUrl(d.logo_url||'')).catch(()=>{}) }, []);
 
@@ -789,9 +819,9 @@ export default function Page() {
   return (
     <div
       style={{
-        background: '#FAFAF8',
+        background: '#191E29',
         minHeight: '100vh',
-        color: '#1A1A1A',
+        color: '#FFFFFF',
         fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
         position: 'relative',
         zIndex: 2,
@@ -800,7 +830,7 @@ export default function Page() {
       <style>{`
         @keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
         @keyframes blink { 0%,100% { opacity: 1;} 50% { opacity: 0.2;} }
-        @keyframes pulseGlow { 0%,100% { box-shadow: 0 0 20px rgba(205,242,43,0.08);} 50% { box-shadow: 0 0 40px rgba(30,69,251,0.15);} }
+        @keyframes pulseGlow { 0%,100% { box-shadow: 0 0 20px rgba(1,195,141,0.08);} 50% { box-shadow: 0 0 40px rgba(1,195,141,0.15);} }
         .spin { display:inline-block; animation: spin 0.7s linear infinite; }
         .blink { animation: blink 1.2s steps(1) infinite; }
         .pixel { font-family: 'Press Start 2P', monospace; letter-spacing: 0; line-height: 1.6; }
@@ -808,11 +838,11 @@ export default function Page() {
         textarea, input, button { font-family: 'IBM Plex Mono', 'Courier New', monospace; }
         textarea::placeholder { color: #8b8b83 !important; }
         .abtn { transition: transform .06s ease, box-shadow .06s ease, background .15s ease; }
-        .abtn:not(:disabled):hover { transform: translate(-1px,-2px); box-shadow: 4px 4px 0 rgba(205,242,43,0.6); }
+        .abtn:not(:disabled):hover { transform: translate(-1px,-2px); box-shadow: 4px 4px 0 rgba(1,195,141,0.6); }
         .abtn:not(:disabled):active { transform: translate(2px,2px); box-shadow: 0px 0px 0 rgba(0,0,0,0); }
         *::-webkit-scrollbar { height: 6px; width: 6px; }
-        *::-webkit-scrollbar-track { background:${C.dark}; }
-        *::-webkit-scrollbar-thumb { background:${C.gray}; border-radius: 0; }
+        *::-webkit-scrollbar-track { background:${C.black}; }
+        *::-webkit-scrollbar-thumb { background:${C.muted}; border-radius: 0; }
       `}</style>
 
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '0 16px', position: 'relative', zIndex: 2 }}>
@@ -826,37 +856,30 @@ export default function Page() {
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '12px 0',
-            background: 'rgba(250,250,248,0.94)',
+            background: 'rgba(25,30,41,0.94)',
             backdropFilter: 'blur(12px)',
-            borderBottom: `1px solid rgba(0,0,0,0.08)`,
+            borderBottom: `1px solid rgba(255,255,255,0.08)`,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span className="blink" style={{ width: 6, height: 6, background: C.lime, display: 'inline-block' }} />
-            {brandLogoUrl ? <img src={brandLogoUrl} style={{height:24}} /> : <span className="pixel" style={{ fontSize: 10, color: C.lime }}>publisio</span>}
-            <span style={{ fontSize: 9, color: '#666666', marginLeft: 6 }}>
-              TOKYO-01
-            </span>
+            <span style={{ width: 6, height: 6, background: C.lime, display: 'inline-block' }} />
+            <span className="pixel" style={{ fontSize: 10, color: C.lime }}>publisio</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <span style={{ fontSize: 9, color: '#666666', fontFamily: "'IBM Plex Mono', monospace" }}>60 FPS</span>
-            <span className="pixel" style={{ fontSize: 7, color: '#666666', border: `1px solid #666666`, padding: '3px 7px' }}>
-              v1.0
-            </span>
             {user ? (
               <>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', fontFamily: "'IBM Plex Mono', monospace", maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 10, color: C.muted, fontFamily: "'IBM Plex Mono', monospace", maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {user.email}
                 </span>
                 <Link href="/settings" className="pixel" style={{ fontSize: 7, color: C.lime, textDecoration: 'none', border: `1px solid ${C.lime}`, padding: '4px 7px' }}>
-                  SET
+                  Setelan
                 </Link>
-                <button onClick={signOutCookie} className="pixel" style={{ fontSize: 7, color: 'rgba(255,255,255,0.8)', background: 'transparent', border: `1px solid rgba(255,255,255,0.3)`, padding: '4px 7px', cursor: 'pointer' }}>
-                  OUT
+                <button onClick={signOutCookie} className="pixel" style={{ fontSize: 7, color: C.muted, background: 'transparent', border: `1px solid rgba(255,255,255,0.3)`, padding: '4px 7px', cursor: 'pointer' }}>
+                  Keluar
                 </button>
               </>
             ) : (
-              <span className="pixel" style={{ fontSize: 7, color: 'rgba(255,255,255,0.8)', border: `1px solid rgba(255,255,255,0.3)`, padding: '3px 7px' }}>
+              <span className="pixel" style={{ fontSize: 7, color: C.muted, border: `1px solid rgba(255,255,255,0.3)`, padding: '3px 7px' }}>
                 user
               </span>
             )}
@@ -864,69 +887,6 @@ export default function Page() {
         </header>
 
         <main style={{ display: 'flex', flexDirection: 'column', gap: 28, paddingTop: 32, paddingBottom: 60 }}>
-          {/* ============ Hero ============ */}
-          <section style={{ textAlign: 'center', padding: '40px 0 20px' }}>
-            <h1 className="pixel" style={{
-              fontSize: 28,
-              color: C.white,
-              textShadow: `3px 3px 0 #1E45FB`,
-              lineHeight: 1.5,
-              margin: 0,
-              wordBreak: 'break-word',
-            }}>
-              PLAYLGROUND
-            </h1>
-            <p style={{ fontSize: 13, color: C.gray, marginTop: 18, maxWidth: 420, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
-              Paste a link or type your topic — we handle the rest.
-            </p>
-            <div style={{ marginTop: 12 }}>
-              <span style={{ fontSize: 10, color: '#666666' }}>● ONLINE</span>
-              <span style={{ fontSize: 10, color: '#666666', margin: '0 8px' }}>•••</span>
-              <span style={{ fontSize: 10, color: '#666666' }}>● TOKYO-01</span>
-            </div>
-          </section>
-
-          {/* ============ Reference Upload (Clone Style) ============ */}
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span className="pixel" style={{ fontSize: 8, color: C.gray }}>REFERENSI FORMAT (opsional)</span>
-            </div>
-            <input
-              type="text"
-              value={referenceUrl}
-              onChange={(e) => setReferenceUrl(e.target.value)}
-              placeholder="Paste link IG carousel..."
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                background: '#111118',
-                border: `1px solid ${C.lime}`,
-                borderRadius: 8,
-                color: C.white,
-                fontSize: 13,
-                outline: 'none',
-                fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
-                boxSizing: 'border-box',
-              }}
-            />
-            <div style={{ textAlign: 'center', fontSize: 10, color: C.gray }}>atau</div>
-            <label className="pixel" style={{ fontSize: 7, color: C.blue, border: `1px solid ${C.blue}`, padding: '4px 8px', borderRadius: 6, cursor: 'pointer', textAlign: 'center' }}>
-              + UPLOAD CONTOH
-              <input ref={refInputRef} type="file" accept="image/*" multiple onChange={handleRefScreenshots} style={{ display: 'none' }} />
-            </label>
-            {refScreenshots.length > 0 ? (
-              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
-                {refScreenshots.map((ref, i) => (
-                  <div key={i} style={{ position: 'relative', flex: '0 0 auto', width: 80, height: 100, borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.blue}` }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={ref.preview} alt={`ref ${i+1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    <button onClick={() => removeRefScreenshot(i)} style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-                  </div>
-                ))}
-              </div>
-            ) : <div style={{ fontSize: 10, color: C.gray }}>Upload screenshot slide-slide Instagram sebagai referensi format</div>}
-          </section>
-
           {/* ============ Input Card ============ */}
           <section
             style={{
@@ -941,7 +901,7 @@ export default function Page() {
           >
             {/* Content Mode selector */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span className="pixel" style={{ fontSize: 8, color: C.lime }}>CONTENT MODE</span>
+              <span className="pixel" style={{ fontSize: 8, color: C.lime }}>Mode</span>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   onClick={() => setContentMode('full-ai')}
@@ -951,12 +911,12 @@ export default function Page() {
                     borderRadius: 20,
                     fontSize: 9,
                     border: contentMode === 'full-ai' ? 'none' : `1px solid rgba(255,255,255,0.2)`,
-                    background: contentMode === 'full-ai' ? '#1E45FB' : 'transparent',
+                    background: contentMode === 'full-ai' ? C.lime : 'transparent',
                     color: contentMode === 'full-ai' ? '#FFFFFF' : '#888888',
                     cursor: 'pointer',
                   }}
                 >
-                  Full AI
+                  Otomatis
                 </button>
                 <button
                   onClick={() => setContentMode('source-first')}
@@ -966,12 +926,12 @@ export default function Page() {
                     borderRadius: 20,
                     fontSize: 9,
                     border: contentMode === 'source-first' ? 'none' : `1px solid rgba(255,255,255,0.2)`,
-                    background: contentMode === 'source-first' ? '#1E45FB' : 'transparent',
+                    background: contentMode === 'source-first' ? C.lime : 'transparent',
                     color: contentMode === 'source-first' ? '#FFFFFF' : '#888888',
                     cursor: 'pointer',
                   }}
                 >
-                  Source First
+                  Sumber
                 </button>
               </div>
             </div>
@@ -990,7 +950,7 @@ export default function Page() {
                       borderRadius: 20,
                       fontSize: 9,
                       border: aspectRatio === r.id ? 'none' : `1px solid rgba(255,255,255,0.2)`,
-                      background: aspectRatio === r.id ? '#1E45FB' : 'transparent',
+                       background: aspectRatio === r.id ? C.lime : 'transparent',
                       color: aspectRatio === r.id ? '#FFFFFF' : '#888888',
                       cursor: 'pointer',
                       display: 'flex',
@@ -1011,13 +971,13 @@ export default function Page() {
               ref={textareaRef}
               value={textValue}
               onChange={handleTextChange}
-              rows={4}
-              placeholder="Paste link, teks, atau ketik konten di sini..."
+              rows={6}
+              placeholder="Tulis topik atau paste link artikel/video..."
               style={{
                 width: '100%',
-                minHeight: 96,
+                minHeight: 160,
                 resize: 'none',
-                background: '#111118',
+                background: C.black,
                 border: `1px solid ${C.lime}`,
                 borderRadius: 10,
                 color: C.white,
@@ -1062,7 +1022,7 @@ export default function Page() {
                   borderRadius: 12,
                   fontSize: 11,
                   cursor: canSubmit ? 'pointer' : 'not-allowed',
-                  boxShadow: canSubmit ? '4px 4px 0 rgba(205,242,43,0.3)' : 'none',
+                  boxShadow: canSubmit ? '4px 4px 0 rgba(1,195,141,0.3)' : 'none',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1221,6 +1181,45 @@ export default function Page() {
                 {error}
               </div>
             ) : null}
+
+            {/* Referensi Format */}
+            <div style={{ borderTop: `1px solid rgba(255,255,255,0.06)`, paddingTop: 14, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <span style={{ fontSize: 10, color: C.muted }}>Referensi Format (opsional)</span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={referenceUrl}
+                  onChange={(e) => setReferenceUrl(e.target.value)}
+                  placeholder="Paste link IG carousel..."
+                  style={{
+                    flex: 1,
+                    padding: '10px 12px',
+                    background: C.black,
+                    border: `1px solid rgba(255,255,255,0.1)`,
+                    borderRadius: 8,
+                    color: C.white,
+                    fontSize: 13,
+                    outline: 'none',
+                    fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <label style={{ fontSize: 10, color: C.lime, border: `1px solid ${C.lime}`, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: "'IBM Plex Mono', monospace" }}>
+                  📤 Unggah
+                  <input ref={refInputRef} type="file" accept="image/*" multiple onChange={handleRefScreenshots} style={{ display: 'none' }} />
+                </label>
+              </div>
+              {refScreenshots.length > 0 ? (
+                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+                  {refScreenshots.map((ref, i) => (
+                    <div key={i} style={{ position: 'relative', flex: '0 0 auto', width: 64, height: 80, borderRadius: 6, overflow: 'hidden', border: `1px solid ${C.lime}` }}>
+                      <img src={ref.preview} alt={`ref ${i+1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <button onClick={() => removeRefScreenshot(i)} style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', fontSize: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </section>
 
           {/* ============ Progress ============ */}
@@ -1419,7 +1418,7 @@ export default function Page() {
                     color: C.black,
                     fontSize: 10,
                     cursor: 'pointer',
-                    boxShadow: '4px 4px 0 rgba(205,242,43,0.3)',
+                    boxShadow: '4px 4px 0 rgba(1,195,141,0.3)',
                   }}
                 >
                   ▶ POST IG
@@ -1449,7 +1448,7 @@ export default function Page() {
               }}
             >
               <span>
-                RIWAYAT <span style={{ color: 'rgba(0,0,0,0.4)' }}>({historyEntries.length})</span>
+                Riwayat <span style={{ color: 'rgba(255,255,255,0.4)' }}>({historyEntries.length})</span>
               </span>
               <span style={{ color: 'rgba(0,0,0,0.4)' }}>{historyOpen ? '▾' : '▸'}</span>
             </button>
@@ -1521,7 +1520,7 @@ export default function Page() {
                                 style={{
                                   fontSize: 7,
                                   color: C.blue,
-                                  border: `1px solid rgba(30,69,251,0.4)`,
+                                   border: `1px solid rgba(1,195,141,0.4)`,
                                   borderRadius: 5,
                                   padding: '3px 6px',
                                   textTransform: 'uppercase',
@@ -1660,42 +1659,6 @@ export default function Page() {
             ) : null}
           </section>
 
-          {/* ============ Feature Cards ============ */}
-          {!result ? (
-            <section
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))',
-                gap: 14,
-                marginTop: 8,
-              }}
-            >
-              {[
-                { title: 'GENERATE', desc: 'Turn any link or topic into a multi-slide carousel with AI visuals.', tag: '01' },
-                { title: 'ANALYZE', desc: 'Gemini reads your content and creates structured slides automatically.', tag: '02' },
-                { title: 'POST', desc: 'Download as ZIP or publish directly to Instagram with one click.', tag: '03' },
-              ].map((card) => (
-                <div
-                  key={card.tag}
-                  style={{
-                    background: C.blue,
-                    border: `1px solid rgba(0,0,0,0.06)`,
-                    borderRadius: 12,
-                    padding: 18,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 10,
-                    transition: 'all .2s ease',
-                  }}
-                >
-                  <span className="pixel" style={{ fontSize: 18, color: C.lime }}>{card.tag}</span>
-                  <h3 className="pixel" style={{ fontSize: 10, color: C.white, margin: 0 }}>{card.title}</h3>
-                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6, margin: 0 }}>{card.desc}</p>
-                </div>
-              ))}
-            </section>
-          ) : null}
-
           {/* ============ Footer ============ */}
           <footer
             style={{
@@ -1707,12 +1670,8 @@ export default function Page() {
               alignItems: 'center',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="pixel" style={{ fontSize: 8, color: '#666666' }}>publisio</span>
-              <span style={{ fontSize: 8, color: '#666666' }}>•••</span>
-              <span style={{ fontSize: 9, color: '#666666' }}>TOKYO-01</span>
-            </div>
-            <span style={{ fontSize: 8, color: '#666666' }}>© 2026</span>
+            <span className="pixel" style={{ fontSize: 8, color: C.muted }}>publisio</span>
+            <span style={{ fontSize: 8, color: C.muted }}>© 2026</span>
           </footer>
         </main>
 
@@ -1795,7 +1754,6 @@ export default function Page() {
                   ) : null}
                 </div>
               ) : null}
-                ) : null}
             </div>
           </div>
         ) : null}
@@ -1994,7 +1952,7 @@ export default function Page() {
                     color: C.black,
                     fontSize: 10,
                     cursor: publishing ? 'not-allowed' : 'pointer',
-                    boxShadow: publishing ? 'none' : '4px 4px 0 rgba(205,242,43,0.3)',
+                    boxShadow: publishing ? 'none' : '4px 4px 0 rgba(1,195,141,0.3)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -2045,7 +2003,7 @@ export default function Page() {
               style={{
                 width: '100%',
                 maxWidth: 500,
-                background: '#1a1a26',
+                  background: C.surface,
                 borderRadius: 14,
                 padding: 28,
                 display: 'flex',
@@ -2065,7 +2023,7 @@ export default function Page() {
                 style={{
                   width: '100%',
                   minHeight: 120,
-                  background: '#111118',
+                  background: C.black,
                   border: '1px solid rgba(255,255,255,0.12)',
                   borderRadius: 10,
                   color: C.white,
@@ -2122,7 +2080,7 @@ export default function Page() {
                     color: C.black,
                     fontSize: 11,
                     cursor: 'pointer',
-                    boxShadow: '4px 4px 0 rgba(205,242,43,0.3)',
+                    boxShadow: '4px 4px 0 rgba(1,195,141,0.3)',
                   }}
                 >
                   ▶ SAVE
