@@ -68,6 +68,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid mode' }, { status: 400 })
     }
 
+    // Validate Instagram credentials early
+    const igToken = igOpts?.token || process.env.META_ACCESS_TOKEN
+    const igAccount = igOpts?.accountId || process.env.INSTAGRAM_ACCOUNT_ID
+    if (!igToken) {
+      return NextResponse.json({ error: 'Meta Access Token belum diisi. Buka Settings → Meta Access Token.' }, { status: 400 })
+    }
+    if (!igAccount) {
+      return NextResponse.json({ error: 'Instagram Account ID belum diisi. Buka Settings → Instagram Account ID.' }, { status: 400 })
+    }
+
     const slides: Array<{ imageUrl?: string }> = Array.isArray(body?.slides) ? body.slides : []
     const imageUrls = slides.filter((s) => s?.imageUrl).map((s) => s.imageUrl as string)
     const thumbUrl = imageUrls[0]
