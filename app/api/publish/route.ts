@@ -68,14 +68,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid mode' }, { status: 400 })
     }
 
-    // Validate Instagram credentials early
+    // Validate Instagram credentials early and resolve final values.
+    // igOpts may be undefined if auth cookie is missing/expired — fall back to
+    // env vars so the publish still works as long as one source has the creds.
     const igToken = igOpts?.token || process.env.META_ACCESS_TOKEN
     const igAccount = igOpts?.accountId || process.env.INSTAGRAM_ACCOUNT_ID
     if (!igToken) {
       return NextResponse.json({ error: 'Meta Access Token belum diisi. Buka Settings → Meta Access Token.' }, { status: 400 })
     }
     if (!igAccount) {
-      return NextResponse.json({ error: 'Instagram Account ID belum diisi. Buka Settings → Instagram Account ID.' }, { status: 400 })
+      return NextResponse.json({ error: 'Instagram Account ID belum diisi. Buka Settings → IG Account ID.' }, { status: 400 })
+    }
+    // Override igOpts with fully-resolved values so downstream calls always
+    // receive a concrete account ID regardless of the auth cookie state.
+    igOpts = { token: igToken, accountId: igAccount }
+    if (!fbOpts?.pageId) {
+      fbOpts = { token: igToken, pageId: fbOpts?.pageId || process.env.FACEBOOK_PAGE_ID }
     }
 
     const slides: Array<{ imageUrl?: string }> = Array.isArray(body?.slides) ? body.slides : []
