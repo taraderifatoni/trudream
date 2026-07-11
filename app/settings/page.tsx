@@ -3,12 +3,15 @@
 import { useState, useEffect, FormEvent, Suspense } from 'react'
 import Link from 'next/link'
 
-const L = '#CDF22B'
-const B = '#1E45FB'
-const G = '#888888'
-const W = '#e8e8ec'
-const D = '#111118'
-const S = '#1a1a26'
+// Beautifio palette
+const PEACOCK   = '#084463'
+const SAFFRON   = '#FFC64F'
+const ICY       = '#6BB9D4'
+const WHITE     = '#F8FAFC'
+const DEEP      = '#1E2938'
+const SLATE     = '#647488'
+const CARD      = '#0a2235'
+const BORDER    = 'rgba(107,185,212,0.15)'
 
 function getUserFromCookie() {
   if (typeof document === 'undefined') return null
@@ -18,85 +21,74 @@ function getUserFromCookie() {
   } catch { return null }
 }
 
-function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 11, color: '#1a1a1a', fontWeight: 600 }}>{label}</span>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <input
-          type="color"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          style={{ width: 36, height: 36, padding: 2, borderRadius: 6, border: '1px solid rgba(0,0,0,0.15)', background: 'transparent', cursor: 'pointer', flexShrink: 0 }}
-        />
-        <input
-          type="text"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          className="light-input"
-          style={{ flex: 1 }}
-          placeholder="#000000"
-        />
-      </div>
+      <span style={{ fontSize: 13, color: WHITE, fontWeight: 600, fontFamily: "'Poppins',sans-serif" }}>{label}</span>
+      {hint && <span style={{ fontSize: 11, color: SLATE, lineHeight: 1.5 }}>{hint}</span>}
+      {children}
     </label>
   )
 }
 
-function SettingsForm() {
-  const [user, setUser] = useState<{email: string} | null>(null)
-  const [brandLogoUrl, setBrandLogoUrl] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState('')
+const inputStyle: React.CSSProperties = {
+  background: '#071a2b',
+  border: `1px solid ${BORDER}`,
+  color: WHITE,
+  padding: '11px 14px',
+  borderRadius: 10,
+  fontSize: 14,
+  outline: 'none',
+  fontFamily: "'IBM Plex Mono','Courier New',monospace",
+  width: '100%',
+  boxSizing: 'border-box',
+}
 
-  // Brand identity
-  const [brandVoice, setBrandVoice] = useState('')
-  const [logoUrl, setLogoUrl] = useState('')
-  const [logoPosition, setLogoPosition] = useState('bottom-right')
+function SettingsForm() {
+  const [user, setUser]               = useState<{ email: string } | null>(null)
+  const [loading, setLoading]         = useState(true)
+  const [saving, setSaving]           = useState(false)
+  const [msg, setMsg]                 = useState('')
+
+  // Brand Identity
+  const [logoUrl, setLogoUrl]                 = useState('')
+  const [showLogo, setShowLogo]               = useState(true)
+  const [brandVoice, setBrandVoice]           = useState('')
   const [instagramHandle, setInstagramHandle] = useState('')
-  const [headingFont, setHeadingFont] = useState('Press Start 2P')
-  const [bodyFont, setBodyFont] = useState('VT323')
-  const [slideBgColor, setSlideBgColor] = useState('#09090B')
-  const [slideAccentColor, setSlideAccentColor] = useState('#CDF22B')
-  const [slideAccent2Color, setSlideAccent2Color] = useState('#1E45FB')
-  const [slideTextColor, setSlideTextColor] = useState('#FFFFFF')
-  const [slideMutedColor, setSlideMutedColor] = useState('#e2e2e2')
-  const [slideWidth, setSlideWidth] = useState(1080)
+
+  // Slide dimensions
+  const [slideWidth, setSlideWidth]   = useState(1080)
   const [slideHeight, setSlideHeight] = useState(1350)
 
   // Connections
-  const [metaToken, setMetaToken] = useState('')
+  const [metaToken, setMetaToken]     = useState('')
   const [igAccountId, setIgAccountId] = useState('')
-  const [fbPageId, setFbPageId] = useState('')
+  const [fbPageId, setFbPageId]       = useState('')
+  const [openaiKey, setOpenaiKey]     = useState('')
 
   useEffect(() => {
     const u = getUserFromCookie()
     if (!u) { window.location.href = '/auth'; return }
     setUser(u)
-    fetch('/api/settings', { credentials: 'include' }).then(r => r.json()).then(d => {
-      if (d && !d.error) {
-        setBrandVoice(d.brand_voice || '')
-        setLogoUrl(d.logo_url || '')
-        setLogoPosition(d.logo_position || 'bottom-right')
-        setInstagramHandle(d.instagram_handle || '')
-        setHeadingFont(d.heading_font || 'Press Start 2P')
-        setBodyFont(d.body_font || 'VT323')
-        setSlideBgColor(d.slide_bg_color || '#09090B')
-        setSlideAccentColor(d.slide_accent_color || '#CDF22B')
-        setSlideAccent2Color(d.slide_accent2_color || '#1E45FB')
-        setSlideTextColor(d.slide_text_color || '#FFFFFF')
-        setSlideMutedColor(d.slide_muted_color || '#e2e2e2')
-        setSlideWidth(d.slide_width || 1080)
-        setSlideHeight(d.slide_height || 1350)
-        setMetaToken(d.meta_token || '')
-        setIgAccountId(d.ig_account_id || '')
-        setFbPageId(d.fb_page_id || '')
-      }
-      setLoading(false)
-    }).catch(() => setLoading(false))
+    fetch('/api/settings', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => {
+        if (d && !d.error) {
+          setLogoUrl(d.logo_url || '')
+          setShowLogo(d.logo_position !== 'none')
+          setBrandVoice(d.brand_voice || '')
+          setInstagramHandle(d.instagram_handle || '')
+          setSlideWidth(d.slide_width || 1080)
+          setSlideHeight(d.slide_height || 1350)
+          setMetaToken(d.meta_token || '')
+          setIgAccountId(d.ig_account_id || '')
+          setFbPageId(d.fb_page_id || '')
+          setOpenaiKey(d.openai_key || '')
+        }
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
   }, [])
-
-  useEffect(() => { fetch('/api/brand').then(r=>r.json()).then(d=>setBrandLogoUrl(d.logo_url||'')).catch(()=>{}) }, [])
 
   async function handleSave(e: FormEvent) {
     e.preventDefault()
@@ -108,27 +100,21 @@ function SettingsForm() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          brand_voice: brandVoice,
           logo_url: logoUrl,
-          logo_position: logoPosition,
+          logo_position: showLogo ? 'bottom-right' : 'none',
+          brand_voice: brandVoice,
           instagram_handle: instagramHandle,
-          heading_font: headingFont,
-          body_font: bodyFont,
-          slide_bg_color: slideBgColor,
-          slide_accent_color: slideAccentColor,
-          slide_accent2_color: slideAccent2Color,
-          slide_text_color: slideTextColor,
-          slide_muted_color: slideMutedColor,
           slide_width: slideWidth,
           slide_height: slideHeight,
           meta_token: metaToken,
           ig_account_id: igAccountId,
           fb_page_id: fbPageId,
+          openai_key: openaiKey,
         }),
       })
       const d = await r.json()
-      if (!r.ok) throw new Error(d.error || 'Save failed')
-      setMsg('✓ Saved')
+      if (!r.ok) throw new Error(d.error || 'Gagal menyimpan')
+      setMsg('✓ Tersimpan')
     } catch (e: any) {
       setMsg(e.message)
     } finally {
@@ -136,196 +122,239 @@ function SettingsForm() {
     }
   }
 
-  if (loading) return <div style={{minHeight:'100vh',background:'#111118'}} />
+  if (loading) return <div style={{ minHeight: '100vh', background: DEEP }} />
 
   return (
-    <div style={{ background: D, minHeight: '100vh', color: W, fontFamily: "'IBM Plex Mono','Courier New',monospace", position:'relative', zIndex:2 }}>
+    <div style={{ background: DEEP, minHeight: '100vh', color: WHITE, fontFamily: "'Poppins','IBM Plex Mono',sans-serif" }}>
       <style>{`
-        .pixel { font-family: 'Press Start 2P', monospace; letter-spacing:0; line-height:1.6; }
-        .abtn { transition: transform .06s ease, box-shadow .06s ease; }
-        .abtn:hover:not(:disabled) { transform: translate(-1px,-2px); box-shadow: 4px 4px 0 rgba(205,242,43,0.5); }
-        .abtn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 0px 0px 0 #000; }
-        input { background:#111118; border:1px solid rgba(255,255,255,0.12); color:#e8e8ec; padding:12px 14px; border-radius:10px; font-size:14px; outline:none; font-family:'IBM Plex Mono',monospace; width:100%; box-sizing:border-box; }
-        input:focus { border-color:${L}; }
-        .light-input { background:#F5F5F0; border:1px solid rgba(0,0,0,0.12); color:#1a1a1a; }
-        .light-input:focus { border-color:${B}; }
+        input, textarea { transition: border-color .15s; }
+        input:focus, textarea:focus { border-color: ${ICY} !important; outline: none; }
+        .tog { cursor: pointer; user-select: none; }
+        .tog:hover .tog-track { border-color: ${ICY}; }
       `}</style>
 
-      <header style={{ position:'sticky',top:0,zIndex:20,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',background:'rgba(250,250,248,0.94)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(0,0,0,0.08)',maxWidth:760,margin:'0 auto' }}>
-        <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <Link href="/playground" style={{display:'flex',alignItems:'center',gap:10,textDecoration:'none'}}>
-            <span style={{width:6,height:6,background:L,display:'inline-block'}} />
-            {brandLogoUrl ? <img src={brandLogoUrl} style={{height:24}} /> : <span className="pixel" style={{fontSize:10,color:L}}>publisio</span>}
+      {/* Header */}
+      <header style={{
+        position: 'sticky', top: 0, zIndex: 20,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 20px',
+        background: 'rgba(8,68,99,0.95)', backdropFilter: 'blur(12px)',
+        borderBottom: `1px solid ${BORDER}`,
+      }}>
+        <Link href="/playground" style={{ textDecoration: 'none' }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: SAFFRON, letterSpacing: '-0.5px' }}>publisio</span>
+        </Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 12, color: SLATE }}>{user?.email}</span>
+          <Link href="/playground" style={{
+            fontSize: 12, color: ICY, textDecoration: 'none',
+            border: `1px solid ${ICY}`, borderRadius: 8, padding: '4px 12px',
+          }}>
+            ← Kembali
           </Link>
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <span style={{fontSize:10,color:G}}>{user?.email}</span>
-          <Link href="/playground" className="pixel" style={{fontSize:7,color:L,textDecoration:'none',border:`1px solid ${L}`,padding:'3px 7px'}}>BACK</Link>
         </div>
       </header>
 
-      <main style={{maxWidth:760,margin:'0 auto',padding:'40px 16px',display:'flex',flexDirection:'column',gap:24}}>
+      <main style={{ maxWidth: 680, margin: '0 auto', padding: '40px 20px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+
+        {/* Page title */}
         <div>
-          <h1 className="pixel" style={{fontSize:16,color:B,margin:0}}>SETTINGS</h1>
-          <p style={{fontSize:13,color:G,marginTop:8,lineHeight:1.6}}>
-            Your brand identity and connections — applied to every carousel you generate.
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: SAFFRON, margin: 0 }}>Setelan</h1>
+          <p style={{ fontSize: 13, color: SLATE, marginTop: 6, lineHeight: 1.6 }}>
+            Identitas brand dan koneksi akun — diterapkan ke setiap carousel yang kamu generate.
           </p>
         </div>
 
-        <form onSubmit={handleSave} style={{display:'flex',flexDirection:'column',gap:20}}>
+        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-          {/* SECTION 1: BRAND IDENTITY */}
-          <div style={{background:'#FFFFFF',border:'1px solid rgba(0,0,0,0.08)',borderRadius:14,padding:'24px',display:'flex',flexDirection:'column',gap:18}}>
-            <h2 className="pixel" style={{fontSize:11,color:B,margin:0}}>BRAND IDENTITY</h2>
+          {/* ── IDENTITAS BRAND ── */}
+          <section style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <h2 style={{ fontSize: 11, fontWeight: 700, color: ICY, margin: 0, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              Identitas Brand
+            </h2>
 
-            <label style={{display:'flex',flexDirection:'column',gap:6}}>
-              <span style={{fontSize:11,color:'#1a1a1a',fontWeight:600}}>Logo</span>
-              <span style={{fontSize:10,color:'rgba(0,0,0,0.5)'}}>Upload your brand logo. Shown on generated slides.</span>
-              {logoUrl ? <img src={logoUrl} alt="logo" style={{maxHeight:64,alignSelf:'flex-start',borderRadius:8,border:'1px solid rgba(0,0,0,0.1)',background:'#F5F5F0',padding:6}} /> : null}
-              <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                <input type="text" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://.../logo.png" className="light-input" style={{flex:1}} />
-                <label className="pixel" style={{cursor:'pointer',background:B,color:'#FFFFFF',border:`1px solid ${B}`,borderRadius:10,padding:'10px 14px',fontSize:8,whiteSpace:'nowrap'}}>
-                  UPLOAD
-                  <input type="file" accept="image/*" style={{display:'none'}} onChange={async (e) => {
+            {/* Logo */}
+            <Field label="Logo" hint="Muncul di slide CTA. Upload file atau paste URL.">
+              {logoUrl && (
+                <img src={logoUrl} alt="logo" style={{ maxHeight: 56, alignSelf: 'flex-start', borderRadius: 8, border: `1px solid ${BORDER}`, background: PEACOCK, padding: 6, marginBottom: 4 }} />
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  value={logoUrl}
+                  onChange={e => setLogoUrl(e.target.value)}
+                  placeholder="https://.../logo.png"
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+                <label style={{
+                  cursor: 'pointer', background: PEACOCK, color: SAFFRON,
+                  border: `1px solid ${ICY}`, borderRadius: 10, padding: '11px 16px',
+                  fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+                }}>
+                  Upload
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => {
                     const f = e.target.files?.[0]; if (!f) return
-                    const r = new FileReader(); r.onload = async () => {
+                    const r = new FileReader()
+                    r.onload = async () => {
                       const base64 = (r.result as string).split(',')[1]
-                      const res = await fetch('/api/settings/logo', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify({imageBase64:base64,imageMimeType:f.type}) })
-                      const d = await res.json(); if (d.url) setLogoUrl(d.url)
-                    }; r.readAsDataURL(f)
+                      const res = await fetch('/api/settings/logo', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ imageBase64: base64, imageMimeType: f.type }),
+                      })
+                      const d = await res.json()
+                      if (d.url) setLogoUrl(d.url)
+                    }
+                    r.readAsDataURL(f)
                   }} />
                 </label>
               </div>
-            </label>
 
-            <label style={{display:'flex',flexDirection:'column',gap:6}}>
-              <span style={{fontSize:11,color:'#1a1a1a',fontWeight:600}}>Brand Voice</span>
-              <span style={{fontSize:10,color:'rgba(0,0,0,0.5)'}}>How should AI write and design for you? Applies to all carousels.</span>
+              {/* Logo toggle */}
+              <div className="tog" onClick={() => setShowLogo(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                <div className="tog-track" style={{
+                  width: 36, height: 20, borderRadius: 10,
+                  background: showLogo ? SAFFRON : 'transparent',
+                  border: `2px solid ${showLogo ? SAFFRON : SLATE}`,
+                  position: 'relative', transition: 'all .15s', flexShrink: 0,
+                }}>
+                  <div style={{
+                    position: 'absolute', top: 2,
+                    left: showLogo ? 18 : 2,
+                    width: 12, height: 12, borderRadius: '50%',
+                    background: showLogo ? DEEP : SLATE,
+                    transition: 'left .15s',
+                  }} />
+                </div>
+                <span style={{ fontSize: 12, color: showLogo ? WHITE : SLATE }}>Tampilkan logo di slide</span>
+              </div>
+            </Field>
+
+            {/* Brand Voice */}
+            <Field label="Brand Voice" hint="Tone penulisan Beautifio. Dikirim ke AI sebagai konteks — bukan ditampilkan di slide.">
               <textarea
                 value={brandVoice}
                 onChange={e => setBrandVoice(e.target.value)}
-                rows={6}
-                placeholder="Describe your brand — who are you, what's your tone, what colors do you like, what style feels like you..."
-                style={{width:'100%',minHeight:120,background:'#F5F5F0',border:'1px solid rgba(0,0,0,0.12)',borderRadius:10,color:'#1a1a1a',padding:12,fontSize:13,lineHeight:1.6,resize:'vertical',outline:'none',fontFamily:"'IBM Plex Mono',monospace",boxSizing:'border-box'}}
-              />
-            </label>
-
-            <label style={{display:'flex',flexDirection:'column',gap:6}}>
-              <span style={{fontSize:11,color:'#1a1a1a',fontWeight:600}}>Instagram Handle</span>
-              <span style={{fontSize:10,color:'rgba(0,0,0,0.5)'}}>Shown on generated slides and captions.</span>
-              <input type="text" value={instagramHandle} onChange={e => setInstagramHandle(e.target.value)} placeholder="@yourhandle" className="light-input" />
-            </label>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <label style={{display:'flex',flexDirection:'column',gap:6}}>
-                <span style={{fontSize:11,color:'#1a1a1a',fontWeight:600}}>Heading Font</span>
-                <input type="text" value={headingFont} onChange={e => setHeadingFont(e.target.value)} placeholder="Press Start 2P" className="light-input" />
-              </label>
-              <label style={{display:'flex',flexDirection:'column',gap:6}}>
-                <span style={{fontSize:11,color:'#1a1a1a',fontWeight:600}}>Body Font</span>
-                <input type="text" value={bodyFont} onChange={e => setBodyFont(e.target.value)} placeholder="VT323" className="light-input" />
-              </label>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-              <ColorField label="BACKGROUND" value={slideBgColor} onChange={setSlideBgColor} />
-              <ColorField label="ACCENT" value={slideAccentColor} onChange={setSlideAccentColor} />
-              <ColorField label="ACCENT 2" value={slideAccent2Color} onChange={setSlideAccent2Color} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <ColorField label="TEXT" value={slideTextColor} onChange={setSlideTextColor} />
-              <ColorField label="MUTED" value={slideMutedColor} onChange={setSlideMutedColor} />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <label style={{display:'flex',flexDirection:'column',gap:6}}>
-                <span style={{fontSize:11,color:'#1a1a1a',fontWeight:600}}>Slide Width</span>
-                <input type="number" value={slideWidth} onChange={e => setSlideWidth(Number(e.target.value) || 0)} className="light-input" />
-              </label>
-              <label style={{display:'flex',flexDirection:'column',gap:6}}>
-                <span style={{fontSize:11,color:'#1a1a1a',fontWeight:600}}>Slide Height</span>
-                <input type="number" value={slideHeight} onChange={e => setSlideHeight(Number(e.target.value) || 0)} className="light-input" />
-              </label>
-            </div>
-
-            <div>
-              <span style={{ fontSize: 11, color: '#1a1a1a', fontWeight: 600, display: 'block', marginBottom: 4 }}>LOGO POSITION ON SLIDES</span>
-              <span style={{ fontSize: 10, color: 'rgba(0,0,0,0.5)', display: 'block', marginBottom: 10 }}>Where your logo appears on generated slides.</span>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                {[
-                  ['TOP LEFT', 'top-left'], ['TOP CTR', 'top-center'], ['TOP RIGHT', 'top-right'],
-                  ['CTR LEFT', 'center-left'], ['CENTER', 'center'], ['CTR RIGHT', 'center-right'],
-                  ['BTM LEFT', 'bottom-left'], ['BTM CTR', 'bottom-center'], ['BTM RIGHT', 'bottom-right'],
-                ].map(([label, value]) => (
-                  <div
-                    key={value}
-                    onClick={() => setLogoPosition(value)}
-                    className="pixel"
-                    style={{
-                      background: logoPosition === value ? B : '#F5F5F0',
-                      color: logoPosition === value ? '#FFFFFF' : '#666',
-                      border: '1px solid rgba(0,0,0,0.1)',
-                      borderRadius: 8,
-                      padding: '8px 6px',
-                      cursor: 'pointer',
-                      fontSize: 7,
-                      textAlign: 'center',
-                      fontFamily: "'Press Start 2P', monospace",
-                    }}
-                  >
-                    {label}
-                  </div>
-                ))}
-              </div>
-              <div
-                onClick={() => setLogoPosition('none')}
-                className="pixel"
+                rows={5}
+                placeholder="Contoh: Beautifio adalah ruang curhat perempuan. Tone-nya hangat, empati, tidak menghakimi. Kalimat pendek, human, jangan terlalu formal."
                 style={{
-                  marginTop: 8,
-                  background: logoPosition === 'none' ? B : '#F5F5F0',
-                  color: logoPosition === 'none' ? '#FFFFFF' : '#666',
-                  border: '1px solid rgba(0,0,0,0.1)',
-                  borderRadius: 8,
-                  padding: '8px 6px',
-                  cursor: 'pointer',
-                  fontSize: 7,
-                  textAlign: 'center',
-                  fontFamily: "'Press Start 2P', monospace",
+                  ...inputStyle,
+                  minHeight: 110, resize: 'vertical', lineHeight: 1.6,
+                  fontFamily: "'Poppins',sans-serif", fontSize: 13,
                 }}
-              >
-                NONE
-              </div>
+              />
+            </Field>
+
+            {/* Instagram Handle */}
+            <Field label="Handle Instagram" hint="Ditampilkan di pojok kanan bawah setiap slide.">
+              <input
+                type="text"
+                value={instagramHandle}
+                onChange={e => setInstagramHandle(e.target.value)}
+                placeholder="@beautifio.space"
+                style={inputStyle}
+              />
+            </Field>
+          </section>
+
+          {/* ── KONEKSI ── */}
+          <section style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <h2 style={{ fontSize: 11, fontWeight: 700, color: ICY, margin: 0, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              Koneksi
+            </h2>
+
+            <Field label="Meta Access Token" hint="Long-lived Page access token. Dimulai dengan EAA...">
+              <input
+                type="password"
+                value={metaToken}
+                onChange={e => setMetaToken(e.target.value)}
+                placeholder="EAAAbc..."
+                style={inputStyle}
+                autoComplete="off"
+              />
+            </Field>
+
+            <Field label="Instagram Account ID" hint="ID akun Instagram Business kamu. Wajib diisi untuk posting carousel.">
+              <input
+                value={igAccountId}
+                onChange={e => setIgAccountId(e.target.value)}
+                placeholder="17841400..."
+                style={inputStyle}
+              />
+            </Field>
+
+            <Field label="Facebook Page ID" hint="Opsional. Untuk cross-post ke halaman Facebook.">
+              <input
+                value={fbPageId}
+                onChange={e => setFbPageId(e.target.value)}
+                placeholder="123456789"
+                style={inputStyle}
+              />
+            </Field>
+
+            <Field label="OpenAI API Key" hint="Opsional. Untuk generate gambar via DALL-E jika Gemini Image tidak tersedia.">
+              <input
+                type="password"
+                value={openaiKey}
+                onChange={e => setOpenaiKey(e.target.value)}
+                placeholder="sk-..."
+                style={inputStyle}
+                autoComplete="off"
+              />
+            </Field>
+          </section>
+
+          {/* ── UKURAN SLIDE ── */}
+          <section style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <h2 style={{ fontSize: 11, fontWeight: 700, color: ICY, margin: 0, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              Ukuran Slide
+            </h2>
+            <p style={{ fontSize: 12, color: SLATE, margin: 0 }}>Default 1080×1350 (rasio 4:5, standar Instagram). Ubah hanya jika perlu.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <Field label="Lebar (px)">
+                <input
+                  type="number"
+                  value={slideWidth}
+                  onChange={e => setSlideWidth(Number(e.target.value) || 1080)}
+                  style={inputStyle}
+                />
+              </Field>
+              <Field label="Tinggi (px)">
+                <input
+                  type="number"
+                  value={slideHeight}
+                  onChange={e => setSlideHeight(Number(e.target.value) || 1350)}
+                  style={inputStyle}
+                />
+              </Field>
             </div>
-          </div>
+          </section>
 
-          {/* SECTION 2: CONNECTIONS */}
-          <div style={{background:'#FFFFFF',border:'1px solid rgba(0,0,0,0.08)',borderRadius:14,padding:'24px',display:'flex',flexDirection:'column',gap:16}}>
-            <h2 className="pixel" style={{fontSize:11,color:B,margin:0}}>CONNECTIONS</h2>
+          {/* Feedback message */}
+          {msg && (
+            <div style={{
+              fontSize: 13, padding: '10px 14px', borderRadius: 10,
+              color: msg.startsWith('✓') ? SAFFRON : '#ef4444',
+              background: msg.startsWith('✓') ? 'rgba(255,198,79,0.08)' : 'rgba(239,68,68,0.08)',
+              border: `1px solid ${msg.startsWith('✓') ? 'rgba(255,198,79,0.3)' : 'rgba(239,68,68,0.3)'}`,
+            }}>
+              {msg}
+            </div>
+          )}
 
-            <label style={{display:'flex',flexDirection:'column',gap:6}}>
-              <span style={{fontSize:11,color:'#1a1a1a',fontWeight:600}}>Meta Access Token</span>
-              <span style={{fontSize:10,color:'rgba(0,0,0,0.5)'}}>Long-lived page access token. Starts with EAA...</span>
-              <input type="password" value={metaToken} onChange={e => setMetaToken(e.target.value)} placeholder="EAAAbc..." className="light-input" />
-            </label>
-
-            <label style={{display:'flex',flexDirection:'column',gap:6}}>
-              <span style={{fontSize:11,color:'#1a1a1a',fontWeight:600}}>Instagram Account ID</span>
-              <span style={{fontSize:10,color:'rgba(0,0,0,0.5)'}}>Your Instagram Business account ID.</span>
-              <input value={igAccountId} onChange={e => setIgAccountId(e.target.value)} placeholder="178414..." className="light-input" />
-            </label>
-
-            <label style={{display:'flex',flexDirection:'column',gap:6}}>
-              <span style={{fontSize:11,color:'#1a1a1a',fontWeight:600}}>Facebook Page ID (optional)</span>
-              <span style={{fontSize:10,color:'rgba(0,0,0,0.5)'}}>Cross-post to your Facebook Page.</span>
-              <input value={fbPageId} onChange={e => setFbPageId(e.target.value)} placeholder="12345..." className="light-input" />
-            </label>
-          </div>
-
-          {/* SECTION 3: SAVE */}
-          {msg ? <div style={{fontSize:13,color:msg.startsWith('✓')?L:'#f87171',padding:'8px 12px',background:S,borderRadius:8,border:`1px solid ${L}20`}}>{msg}</div> : null}
-
-          <button type="submit" disabled={saving} className="pixel abtn" style={{minHeight:48,background:L,color:'#111118',border:`2px solid ${L}`,borderRadius:12,fontSize:11,cursor:saving?'not-allowed':'pointer',boxShadow:'4px 4px 0 rgba(205,242,43,0.3)',opacity:saving?0.6:1}}>
-            {saving ? 'SAVING...' : '▶ SAVE ALL'}
+          {/* Save button */}
+          <button
+            type="submit"
+            disabled={saving}
+            style={{
+              minHeight: 48, background: saving ? SLATE : SAFFRON, color: DEEP,
+              border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700,
+              cursor: saving ? 'not-allowed' : 'pointer',
+              transition: 'background .15s', fontFamily: "'Poppins',sans-serif",
+            }}
+          >
+            {saving ? 'Menyimpan...' : 'Simpan Setelan'}
           </button>
         </form>
       </main>
@@ -335,7 +364,7 @@ function SettingsForm() {
 
 export default function SettingsPage() {
   return (
-    <Suspense fallback={<div style={{minHeight:'100vh',background:'#111118'}} />}>
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#1E2938' }} />}>
       <SettingsForm />
     </Suspense>
   )

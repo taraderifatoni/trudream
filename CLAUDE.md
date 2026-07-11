@@ -727,3 +727,83 @@ export default nextConfig
 7. ZIP download: gunakan `archiver` package, stream semua imagePath + videoPath
 8. Mobile-first: max-width 480px, semua touch-friendly (min tap target 44px)
 9. Tidak perlu database, tidak perlu auth — single user tool
+
+---
+
+## SECTION 16: VIDEO / REELS OUTPUT
+
+Publisio BUKAN hanya carousel statis. Dia juga harus bisa produce **video Reels siap posting**.
+
+### Jenis 1: Video dari sumber → Reels branded
+
+```
+Input: Link YouTube / TikTok / video upload
+Output: Video 9:16 (1080×1920) dengan:
+  - Video asli sebagai background
+  - Text overlay Beautifio (judul, poin-poin)
+  - Branding: @beautifio.space + #curhatinaja
+  - Durasi: sesuai sumber (max 90 detik untuk Reels)
+```
+
+Pipeline:
+```
+URL video → yt-dlp download → ffmpeg resize ke 9:16
+  → ffmpeg add text overlay (judul, subtitle)
+  → ffmpeg add branding bar (handle + hashtag)
+  → output: .mp4 siap posting
+```
+
+### Jenis 2: Carousel slides → video slideshow
+
+```
+Input: Carousel yang sudah di-generate (PNG slides)
+Output: Video 9:16 dari slides yang di-animate:
+  - Setiap slide tampil 3-5 detik
+  - Transisi smooth (fade atau slide)
+  - Background music opsional
+  - Total durasi: slides × 4 detik
+```
+
+Pipeline:
+```
+Slide PNG × N → ffmpeg concat dengan transisi
+  → ffmpeg add duration per slide (4 detik)
+  → output: .mp4 slideshow
+```
+
+### Yang sudah ada di kode (belum optimal)
+- `lib/ytdlp.ts` — download video dari YouTube/TikTok
+- `lib/ffmpeg.ts` — process video
+- `renderVideoOverlay` di `render-slide.ts` — text overlay di video
+
+### Yang perlu dibangun/diperbaiki
+- Text overlay harus pakai warna Beautifio (saffron title, white body)
+- Branding bar di bawah video: `@beautifio.space | #curhatinaja`
+- Ratio selector harus berlaku untuk video juga (9:16 untuk Reels, 1:1 untuk feed video, 16:9 untuk YouTube)
+- UI playground: kalau input video, tampilkan opsi "Output as: Carousel / Reels / Both"
+- Download: selain ZIP (carousel), juga bisa download .mp4 (Reels)
+
+### Aturan text overlay di video
+
+- Font: Poppins Bold untuk title, Poppins Regular untuk body
+- Warna teks: #FFC64F (saffron) untuk title, #FFFFFF (white) untuk body
+- Background bar semi-transparan: rgba(8, 68, 99, 0.7) — peacock 70% opacity
+- Posisi: lower-third (bawah 30% video)
+- Handle + hashtag: bar kecil di very bottom
+
+```
+┌─────────────────────────┐
+│                         │
+│      VIDEO CONTENT      │  70% atas — video asli
+│                         │
+│                         │
+├─────────────────────────┤
+│ ▓▓▓ PEACOCK 70% ▓▓▓▓▓  │  30% bawah — text overlay
+│                         │
+│  Title (SAFFRON)        │
+│  Subtitle (WHITE)       │
+│                         │
+│  @beautifio.space       │
+│  #curhatinaja           │
+└─────────────────────────┘
+```
