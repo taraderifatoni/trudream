@@ -23,23 +23,26 @@ const PAD_TOP = 96
 // ─── Brand palette (HARD LOCK — no other colors allowed on slides) ───────────
 
 const BEAUTIFIO = {
-  primary: '#084463',   // peacock dark blue
-  secondary: '#6BB9D4', // icy sky blue
-  accent: '#FFC64F',    // saffron yellow/gold
-  bg: '#F8FAFC',        // cloud white
+  primary: '#084463',     // peacock blue (background utama slide)
+  secondary: '#6BB9D4',   // icy sky blue (desc text, source attribution)
+  accent: '#FFC64F',      // SAFFRON YELLOW (heading, title, number)
+  accent2: '#6BB9D4',     // icy sky blue
+  accent2Light: '#8CC5D0',
+  bg: '#F8FAFC',          // cloud white
   white: '#FFFFFF',
-  dark: '#1E2938',      // deep slate
-  muted: '#647488',     // slate gray
+  dark: '#1E2938',        // deep slate
+  muted: '#647488',       // slate gray (handle, muted text)
+  deepSlate: '#1E2938',
 }
 
 // Legacy color slots kept for the design-context type and the two auxiliary
 // renderers (video overlay / screenshot). Everything maps onto the brand.
 const COLORS = {
   bg: BEAUTIFIO.primary,
-  accent: BEAUTIFIO.accent,
-  accent2: BEAUTIFIO.secondary,
+  accent: BEAUTIFIO.accent,    // saffron
+  accent2: BEAUTIFIO.secondary, // icy sky
   white: BEAUTIFIO.white,
-  muted: BEAUTIFIO.muted,
+  muted: BEAUTIFIO.muted,      // slate gray
   dim: BEAUTIFIO.secondary,
 }
 
@@ -234,7 +237,8 @@ function drawImageTop(ctx: SKRSContext2D, img: Image, w: number, regionH: number
   const dw = img.width * scale
   const dh = img.height * scale
   const dx = (w - dw) / 2
-  const dy = (regionH - dh) / 2
+  // BIAS KE ATAS: 15% from top instead of 50% center — keeps faces visible in portraits
+  const dy = (regionH - dh) * 0.15
   ctx.save()
   ctx.beginPath()
   ctx.rect(0, 0, w, regionH)
@@ -380,21 +384,37 @@ async function renderCover(
   }
 }
 
-// BULLETS — adaptive: image size, font sizes, and vertical centering scale with bullet count.
-async function renderBullets(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx) {
-  ctx.fillStyle = BEAUTIFIO.primary
-  ctx.fillRect(0, 0, dc.W, dc.H)
-
+// BULLETS — adaptive layout + DUAL MODE:
+//   foto mode  (hasImage = true)  → peacock bg, saffron title, white body, saffron dot
+//   teks mode  (hasImage = false) → cloud-white bg, peacock title, deep-slate body, saffron dot
+async function renderBullets(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx, handle?: string) {
   const bullets = slide.bullets || []
   const bulletCount = bullets.length
-
-  const imgPct = bulletCount <= 2 ? 0.40 : bulletCount <= 4 ? 0.28 : 0.18
-  const imgH = Math.round(dc.H * imgPct)
   const img = await loadSlideImage(slide)
-  if (img) drawImageTop(ctx, img, dc.W, imgH)
+  const hasImage = !!img
+
+  // Dual-mode colour selection
+  const colorBg    = hasImage ? BEAUTIFIO.primary : BEAUTIFIO.bg
+  const colorTitle = hasImage ? BEAUTIFIO.accent  : BEAUTIFIO.primary
+  const colorBody  = hasImage ? BEAUTIFIO.white   : BEAUTIFIO.dark
+  const colorDot   = BEAUTIFIO.accent   // always saffron
+  const colorMuted = BEAUTIFIO.muted    // always slate gray
+
+  ctx.fillStyle = colorBg
+  ctx.fillRect(0, 0, dc.W, dc.H)
+
+  // Image (foto mode only)
+  let imgH = 0
+  if (hasImage) {
+    const imgPct = bulletCount <= 2 ? 0.40 : bulletCount <= 4 ? 0.28 : 0.18
+    imgH = Math.round(dc.H * imgPct)
+    drawImageTop(ctx, img, dc.W, imgH)
+    // Re-paint solid bg below image strip so text area is clean
+    ctx.fillStyle = colorBg
+    ctx.fillRect(0, imgH, dc.W, dc.H - imgH)
+  }
 
   const contentW = dc.W - PAD_X * 2
-
   const titleSize = bulletCount <= 2 ? 56 : bulletCount <= 4 ? 48 : 42
   const bulletSize = bulletCount <= 2 ? 34 : bulletCount <= 4 ? 30 : 26
   const lineHeightRatio = 1.45
@@ -407,7 +427,6 @@ async function renderBullets(ctx: SKRSContext2D, slide: SlideContent, dc: SlideD
     titleLines.push(...wrapText(ctx, slide.title, contentW))
     totalH += titleLines.length * titleSize * lineHeightRatio + 24
   }
-
   for (const b of bullets) {
     ctx.font = font(WEIGHT.regular, bulletSize, FONT)
     totalH += wrapText(ctx, b, contentW - 48).length * bulletLH + 12
@@ -418,7 +437,7 @@ async function renderBullets(ctx: SKRSContext2D, slide: SlideContent, dc: SlideD
   let y = imgH + margin + Math.max(0, (availH - totalH) / 2)
 
   if (titleLines.length) {
-    ctx.fillStyle = BEAUTIFIO.accent
+    ctx.fillStyle = colorTitle
     ctx.font = font(WEIGHT.semibold, titleSize, FONT)
     y = drawLines(ctx, titleLines, PAD_X, y, titleSize * lineHeightRatio, 'left') + 24
   }
@@ -426,18 +445,18 @@ async function renderBullets(ctx: SKRSContext2D, slide: SlideContent, dc: SlideD
   for (const b of bullets) {
     ctx.font = font(WEIGHT.regular, bulletSize, FONT)
     const lines = wrapText(ctx, b, contentW - 48)
-    ctx.fillStyle = BEAUTIFIO.accent
+    ctx.fillStyle = colorDot
     const sq = Math.max(8, bulletSize * 0.35)
     ctx.fillRect(PAD_X, y + bulletLH * 0.5 - sq / 2, sq, sq)
-    ctx.fillStyle = BEAUTIFIO.white
+    ctx.fillStyle = colorBody
     drawLines(ctx, lines, PAD_X + 40, y, bulletLH, 'left')
     y += lines.length * bulletLH + 12
   }
 
-  ctx.fillStyle = BEAUTIFIO.muted
+  ctx.fillStyle = colorMuted
   ctx.font = font(WEIGHT.regular, 20, FONT)
   ctx.textAlign = 'right'
-  ctx.fillText('@beautifio.space', dc.W - PAD_X, dc.H - 40)
+  ctx.fillText(handle || '@beautifio.space', dc.W - PAD_X, dc.H - 40)
   ctx.textAlign = 'left'
 }
 
@@ -639,7 +658,7 @@ async function renderQuote(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDes
 }
 
 // CTA — no image, solid peacock. Saffron headline + follow handle.
-function renderCta(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx, handle: string) {
+async function renderCta(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx, handle: string) {
   ctx.fillStyle = BEAUTIFIO.primary
   ctx.fillRect(0, 0, dc.W, dc.H)
 
@@ -684,6 +703,33 @@ function renderCta(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx, 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
   ctx.fillText(`Follow ${handle || ''}`.trim(), cx, y + handleSize * 0.85)
+  y += handleH + 40
+
+  // Logo Beautifio
+  if (dc.logoUrl) {
+    try {
+      const logo = await loadImage(dc.logoUrl)
+      const logoH = 60
+      const logoW = (logo.width / logo.height) * logoH
+      ctx.drawImage(logo, (dc.W - logoW) / 2, y, logoW, logoH)
+      y += logoH + 40
+    } catch { /* logo load failed, skip */ }
+  }
+
+  // Hashtag #curhatinaja
+  ctx.fillStyle = BEAUTIFIO.accent
+  ctx.font = font(WEIGHT.semibold, 28, FONT)
+  ctx.textAlign = 'center'
+  ctx.fillText('#curhatinaja', dc.W / 2, y + 20)
+  y += 40
+
+  // Tagline
+  ctx.fillStyle = BEAUTIFIO.white
+  ctx.font = font(WEIGHT.regular, 22, FONT)
+  ctx.fillText('di sini, kita semua didengerin.', dc.W / 2, y + 10)
+  ctx.fillText('Ruang Curhat 24/7', dc.W / 2, y + 38)
+
+  ctx.textAlign = 'left'
 }
 
 async function renderFlexible(
@@ -705,7 +751,7 @@ async function renderFlexible(
       drawImageTop(ctx, img, dc.W, imgH)
     } else if (imgPos === 'full') {
       drawImageFull(ctx, img, dc.W, dc.H)
-      ctx.fillStyle = 'rgba(8, 68, 99, 0.55)'
+      ctx.fillStyle = 'rgba(19, 45, 70, 0.55)'
       ctx.fillRect(0, 0, dc.W, dc.H)
     } else if (imgPos === 'left') {
       const imgW = Math.round(dc.W * imgPct)
@@ -803,7 +849,7 @@ async function renderFlexible(
 }
 
 // PROFILE — image top 45%, solid peacock block below. One slide per person/item.
-async function renderProfile(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx) {
+async function renderProfile(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx, handle?: string) {
   ctx.fillStyle = BEAUTIFIO.primary
   ctx.fillRect(0, 0, dc.W, dc.H)
   const imgH = Math.round(dc.H * 0.45)
@@ -830,7 +876,7 @@ async function renderProfile(ctx: SKRSContext2D, slide: SlideContent, dc: SlideD
     y += lines.length * bulletLH + 12
   }
   ctx.fillStyle = BEAUTIFIO.muted; ctx.font = font(WEIGHT.regular, 20, FONT); ctx.textAlign = 'right'
-  ctx.fillText('@beautifio.space', dc.W - PAD_X, dc.H - 40); ctx.textAlign = 'left'
+  ctx.fillText(handle || '@beautifio.space', dc.W - PAD_X, dc.H - 40); ctx.textAlign = 'left'
 }
 
 function renderFallback(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDesignCtx) {
@@ -897,10 +943,10 @@ export async function renderSlide(
       await renderCover(ctx2d, slide, dc, opts.handle)
       break
     case 'profile':
-      await renderProfile(ctx2d, slide, dc)
+      await renderProfile(ctx2d, slide, dc, opts.handle)
       break
     case 'bullets':
-      await renderBullets(ctx2d, slide, dc)
+      await renderBullets(ctx2d, slide, dc, opts.handle)
       break
     case 'stat':
       renderStat(ctx2d, slide, dc)
@@ -912,7 +958,7 @@ export async function renderSlide(
       await renderQuote(ctx2d, slide, dc)
       break
     case 'cta':
-      renderCta(ctx2d, slide, dc, opts.handle)
+      await renderCta(ctx2d, slide, dc, opts.handle)
       break
     default:
       renderFallback(ctx2d, slide, dc)
@@ -942,9 +988,9 @@ export async function renderVideoOverlay(
 
   const topEnd = H * 0.36
   const g = ctx.createLinearGradient(0, 0, 0, topEnd)
-  g.addColorStop(0, 'rgba(8,68,99,0.9)')
-  g.addColorStop(0.7, 'rgba(8,68,99,0.5)')
-  g.addColorStop(1, 'rgba(8,68,99,0)')
+  g.addColorStop(0, 'rgba(19,45,70,0.9)')
+  g.addColorStop(0.7, 'rgba(19,45,70,0.5)')
+  g.addColorStop(1, 'rgba(19,45,70,0)')
   ctx.fillStyle = g
   ctx.fillRect(0, 0, W, topEnd)
 

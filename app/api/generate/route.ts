@@ -8,7 +8,7 @@ import { fetchLinkContent } from '@/lib/scrape'
 import { extractAssets } from '@/lib/asset-extractor'
 import { analyzeReferenceSlides } from '@/lib/analyze-reference'
 import { scrapeIGCarousel } from '@/lib/scrape-ig-carousel'
-import { processVideo } from '@/lib/ffmpeg'
+import { processVideo, buildSlideshow } from '@/lib/ffmpeg'
 import { publishFile } from '@/lib/storage'
 import { CATEGORY_PALETTES, CATEGORY_KEYWORDS } from '@/lib/category-palette'
 import { createClient } from '@supabase/supabase-js'
@@ -93,8 +93,9 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       try {
         const body = await req.json()
-        const contentMode = body.contentMode || 'full-ai'
+        const contentMode = body.contentMode || 'source-first'
         const aspectRatio = body.aspectRatio || '4:5'
+        const outputType: 'carousel' | 'reels' | 'both' = body.outputType || 'carousel'
         const ratioPreset = RATIO_PRESETS[aspectRatio] || RATIO_PRESETS['4:5']
 
         // Reference analysis — clone layout from uploaded screenshots
@@ -279,13 +280,15 @@ CRITICAL INSTRUCTION — ASSET USAGE:
 
         for (let i = 0; i < analysis.slides.length; i++) {
           const slide: any = analysis.slides[i]
+
+          // Normalise: "not needed" imagePrompt → treat as no image needed (Media-First)
+          if (slide.imagePrompt === 'not needed') slide.imagePrompt = ''
+
           if (!slide.imagePrompt && !(slide.assetSource === 'original' && slide.originalAssetIndex !== undefined)) { slidesWithImages.push(slide); continue }
 
           const basePct = 20 + Math.round((i / total) * 60)
 
-          // Slide types that don't need AI background images — the renderer
-          // paints a solid brand background instead. Skip AI generation to save
-          // API calls and keep the output cleaner.
+          // Slide types that don't need AI background images — solid brand bg.
           const NO_IMAGE_TYPES = ['stat', 'grid4', 'quote', 'cta']
           if (NO_IMAGE_TYPES.includes(slide.type as string)) {
             send(controller, { type: 'step', step: 'images', pct: basePct, current: i + 1, total, label: `Slide ${i + 1}/${total} (solid bg)...` })
@@ -303,14 +306,7 @@ CRITICAL INSTRUCTION — ASSET USAGE:
             ? extractedAssets[slide.originalAssetIndex] : null
 
           if (slideWithAsset?.localPath) {
-            send(controller, {
-              type: 'step',
-              step: 'images',
-              pct: basePct,
-              current: i + 1,
-              total,
-              label: `Using source asset for slide ${i + 1}/${total}...`,
-            })
+            send(controller, { type: 'step', step: 'images', pct: basePct, current: i + 1, total, label: `Slide ${i + 1}/${total} (foto sumber)...` })
             try {
               const renderedPath = await renderSlide({ ...slide, imagePath: slideWithAsset.localPath }, { index: i, total, handle, ...slideDesign })
               slidesWithImages.push({ ...slide, backgroundPath: slideWithAsset.localPath, imagePath: renderedPath, imageUrl: await publishFile(renderedPath), assetSource: 'original' })
@@ -320,14 +316,18 @@ CRITICAL INSTRUCTION — ASSET USAGE:
             continue
           }
 
-          send(controller, {
-            type: 'step',
-            step: 'images',
-            pct: basePct,
-            current: i + 1,
-            total,
-            label: `Generating slide ${i + 1}/${total}...`,
-          })
+          // Media-First: in source-first mode, if no source asset AND no imagePrompt → solid bg, no AI
+          if (contentMode === 'source-first' && !slideWithAsset && !slide.imagePrompt) {
+            send(controller, { type: 'step', step: 'images', pct: basePct, current: i + 1, total, label: `Slide ${i + 1}/${total} (solid bg)...` })
+            try {
+              const renderedPath = await renderSlide({ ...slide }, { index: i, total, handle, ...slideDesign })
+              slidesWithImages.push({ ...slide, imagePath: renderedPath, imageUrl: await publishFile(renderedPath), assetSource: 'none' })
+            } catch { slidesWithImages.push(slide) }
+            continue
+          }
+
+          // Full AI mode: generate image via Gemini/DALL-E
+          send(controller, { type: 'step', step: 'images', pct: basePct, current: i + 1, total, label: `Generating slide ${i + 1}/${total}...` })
 
           try {
             const fullImagePrompt = `${slide.imagePrompt}\n\n${ratioLabel}`
@@ -343,7 +343,7 @@ CRITICAL INSTRUCTION — ASSET USAGE:
           }
         }
 
-        send(controller, { type: 'step', step: 'images', pct: 80, label: 'Images generated' })
+        send(controller, { type: 'step', step: 'images', pct: 80, label: 'Slides selesai' })
 
         // Screenshot slide
         if (uploadedImagePath && fs.existsSync(uploadedImagePath)) {
@@ -355,10 +355,10 @@ CRITICAL INSTRUCTION — ASSET USAGE:
           } catch {}
         }
 
-        // Step 3: Video (if any)
+        // Step 3: Video from source (if any)
         let videoSlide = null
         if (videoPath && fs.existsSync(videoPath)) {
-          send(controller, { type: 'step', step: 'video', pct: 85, label: 'Processing video...' })
+          send(controller, { type: 'step', step: 'video', pct: 85, label: 'Memproses video...' })
           let overlayPath: string | undefined
           if (analysis.videoCaption) {
             try { overlayPath = await renderVideoOverlay(analysis.videoCaption, { handle }) } catch {}
@@ -367,11 +367,28 @@ CRITICAL INSTRUCTION — ASSET USAGE:
           videoSlide = { type: 'video', localPath: processedPath, publicUrl: await publishFile(processedPath), durationSeconds: videoDuration }
         }
 
+        // Step 4: Reels slideshow (carousel PNG → MP4) — if outputType includes reels
+        let reelsUrl: string | undefined
+        if (outputType === 'reels' || outputType === 'both') {
+          send(controller, { type: 'step', step: 'reels', pct: 90, label: 'Membuat Reels slideshow...' })
+          try {
+            const slidePaths = slidesWithImages
+              .filter(s => s.imagePath && fs.existsSync(s.imagePath))
+              .map(s => s.imagePath as string)
+            if (slidePaths.length > 0) {
+              const reelsPath = await buildSlideshow(slidePaths, { perSlideSec: 4 })
+              reelsUrl = await publishFile(reelsPath)
+            }
+          } catch (e) {
+            console.error('[generate] Reels slideshow failed:', e)
+          }
+        }
+
         // Done
         send(controller, {
           type: 'done',
           pct: 100,
-          result: { slides: slidesWithImages, videoSlide, caption: analysis.caption, tag: analysis.tag, extractedAssets: extractedAssets.map(a => ({ type: a.type, url: a.url, source: a.source, caption: a.caption })) },
+          result: { slides: slidesWithImages, videoSlide, reelsUrl, caption: analysis.caption, tag: analysis.tag, extractedAssets: extractedAssets.map(a => ({ type: a.type, url: a.url, source: a.source, caption: a.caption })) },
         })
         controller.close()
       } catch (err: any) {

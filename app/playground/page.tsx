@@ -53,6 +53,7 @@ interface VideoSlide {
 interface GenResult {
   slides: Slide[];
   videoSlide: VideoSlide | null;
+  reelsUrl?: string;
   caption: string;
   tag: string;
   extractedAssets?: Array<{ type: string; url: string; source: string; caption?: string }>;
@@ -474,6 +475,7 @@ export default function Page() {
 
   const [contentMode, setContentMode] = useState<'full-ai' | 'source-first'>('source-first');
   const [aspectRatio, setAspectRatio] = useState<'4:5' | '9:16' | '1:1' | '16:9'>('4:5');
+  const [outputType, setOutputType] = useState<'carousel' | 'reels' | 'both'>('carousel');
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -609,6 +611,7 @@ export default function Page() {
       }
       body.contentMode = contentMode;
        body.aspectRatio = aspectRatio;
+      (body as any).outputType = outputType;
       if (refScreenshots.length > 0) {
         ;(body as any).refScreenshots = refScreenshots.map(r => ({ base64: r.base64, mimeType: r.file.type }))
       }
@@ -962,6 +965,35 @@ export default function Page() {
                   >
                     <span>{r.label}</span>
                     <span style={{ fontSize: 7, opacity: 0.7 }}>{r.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Output Type selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span className="pixel" style={{ fontSize: 8, color: C.lime }}>OUTPUT</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {([
+                  { id: 'carousel', label: 'Carousel' },
+                  { id: 'reels',   label: 'Reels'    },
+                  { id: 'both',    label: 'Both'      },
+                ] as const).map(o => (
+                  <button
+                    key={o.id}
+                    onClick={() => setOutputType(o.id)}
+                    className="pixel"
+                    style={{
+                      padding: '6px 16px',
+                      borderRadius: 20,
+                      fontSize: 9,
+                      border: outputType === o.id ? 'none' : `1px solid rgba(255,255,255,0.2)`,
+                      background: outputType === o.id ? C.lime : 'transparent',
+                      color: outputType === o.id ? '#FFFFFF' : '#888888',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {o.label}
                   </button>
                 ))}
               </div>
@@ -1406,6 +1438,29 @@ export default function Page() {
                 >
                   {downloading ? 'WAIT…' : '↓ ZIP'}
                 </button>
+                {result.reelsUrl && (
+                  <a
+                    href={result.reelsUrl}
+                    download="reels.mp4"
+                    className="pixel abtn"
+                    style={{
+                      flex: 1,
+                      minHeight: 46,
+                      background: C.blue,
+                      border: `1px solid ${C.lime}`,
+                      borderRadius: 12,
+                      color: C.lime,
+                      fontSize: 10,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    ↓ MP4
+                  </a>
+                )}
                 <button
                   onClick={openPublish}
                   className="pixel abtn"
