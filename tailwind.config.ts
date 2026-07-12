@@ -5,12 +5,12 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        lime: '#CDF22B',
-        blue: '#1E45FB',
-        black: '#111111',
+        lime: '#01C38D',
+        blue: '#132D46',
+        black: '#191E29',
         white: '#FFFFFF',
-        dark: '#09090B',
-        gray: '#A1A1AA',
+        dark: '#191E29',
+        gray: '#696E79',
       },
       fontFamily: {
         pixel: ['"Press Start 2P"', 'monospace'],

@@ -8,8 +8,9 @@ import { fetchLinkContent } from '@/lib/scrape'
 import { extractAssets } from '@/lib/asset-extractor'
 import { analyzeReferenceSlides } from '@/lib/analyze-reference'
 import { scrapeIGCarousel } from '@/lib/scrape-ig-carousel'
-import { processVideo, buildSlideshow } from '@/lib/ffmpeg'
+import { processVideo, buildSlideshow, brandedReels } from '@/lib/ffmpeg'
 import { publishFile } from '@/lib/storage'
+import { preprocessImage, autoBrightness } from '@/lib/image-processor'
 import { CATEGORY_PALETTES, CATEGORY_KEYWORDS } from '@/lib/category-palette'
 import { createClient } from '@supabase/supabase-js'
 import path from 'path'
@@ -309,17 +310,27 @@ CRITICAL INSTRUCTION — ASSET USAGE:
             continue
           }
 
-          // Source asset available → use it (free, no API call).
+          // Source asset available → preprocess with sharp (position:north crop + auto-brightness) then render.
           const slideWithAsset = slide.assetSource === 'original' && slide.originalAssetIndex !== undefined
             ? extractedAssets[slide.originalAssetIndex] : null
 
           if (slideWithAsset?.localPath) {
             send(controller, { type: 'step', step: 'images', pct: basePct, current: i + 1, total, label: `Slide ${i + 1}/${total} (foto sumber)...` })
             try {
-              const renderedPath = await renderSlide({ ...slide, imagePath: slideWithAsset.localPath }, { index: i, total, handle, ...slideDesign })
-              slidesWithImages.push({ ...slide, backgroundPath: slideWithAsset.localPath, imagePath: renderedPath, imageUrl: await publishFile(renderedPath), assetSource: 'original' })
+              const boost = await autoBrightness(slideWithAsset.localPath)
+              const ppPath = await preprocessImage(slideWithAsset.localPath, {
+                width: ratioPreset.width,
+                height: ratioPreset.height,
+                cropNorth: true,
+                brighten: boost,
+              })
+              const renderedPath = await renderSlide({ ...slide, imagePath: ppPath }, { index: i, total, handle, ...slideDesign })
+              slidesWithImages.push({ ...slide, backgroundPath: ppPath, imagePath: renderedPath, imageUrl: await publishFile(renderedPath), assetSource: 'original' })
             } catch {
-              slidesWithImages.push({ ...slide, imagePath: slideWithAsset.localPath, imageUrl: await publishFile(slideWithAsset.localPath), assetSource: 'original' })
+              try {
+                const renderedPath = await renderSlide({ ...slide, imagePath: slideWithAsset.localPath }, { index: i, total, handle, ...slideDesign })
+                slidesWithImages.push({ ...slide, imagePath: renderedPath, imageUrl: await publishFile(renderedPath), assetSource: 'original' })
+              } catch { slidesWithImages.push(slide) }
             }
             continue
           }
@@ -374,20 +385,37 @@ CRITICAL INSTRUCTION — ASSET USAGE:
           videoSlide = { type: 'video', localPath: processedPath, publicUrl: await publishFile(processedPath), durationSeconds: videoDuration }
         }
 
-        // Step 4: Reels slideshow (carousel PNG → MP4) — if outputType includes reels
+        // Step 4a: Branded Reels from source video (YouTube/TikTok)
+        // Step 4b: Slideshow Reels from carousel PNG slides
         let reelsUrl: string | undefined
         if (outputType === 'reels' || outputType === 'both') {
-          send(controller, { type: 'step', step: 'reels', pct: 90, label: 'Membuat Reels slideshow...' })
-          try {
-            const slidePaths = slidesWithImages
-              .filter(s => s.imagePath && fs.existsSync(s.imagePath))
-              .map(s => s.imagePath as string)
-            if (slidePaths.length > 0) {
-              const reelsPath = await buildSlideshow(slidePaths, { perSlideSec: 4 })
+          // 4a: Source video → branded Reels
+          if (videoPath && fs.existsSync(videoPath)) {
+            send(controller, { type: 'step', step: 'reels', pct: 88, label: 'Membuat Reels dari video sumber...' })
+            try {
+              const coverSlide = analysis.slides[0]
+              const reelsPath = await brandedReels(videoPath, {
+                title: coverSlide?.title || '',
+                subtitle: coverSlide?.subtitle || '',
+                handle,
+                maxSec: 90,
+              })
               reelsUrl = await publishFile(reelsPath)
-            }
-          } catch (e) {
-            console.error('[generate] Reels slideshow failed:', e)
+            } catch (e) { console.error('[generate] brandedReels failed:', e) }
+          }
+
+          // 4b: Carousel slides → slideshow (if no source video, or outputType=both)
+          if (!reelsUrl || outputType === 'both') {
+            send(controller, { type: 'step', step: 'reels', pct: 92, label: 'Membuat Reels slideshow...' })
+            try {
+              const slidePaths = slidesWithImages
+                .filter(s => s.imagePath && fs.existsSync(s.imagePath))
+                .map(s => s.imagePath as string)
+              if (slidePaths.length > 0) {
+                const reelsPath = await buildSlideshow(slidePaths, { perSlideSec: 4 })
+                reelsUrl = await publishFile(reelsPath)
+              }
+            } catch (e) { console.error('[generate] Reels slideshow failed:', e) }
           }
         }
 

@@ -1,11 +1,24 @@
 import { spawn } from 'child_process'
 import path from 'path'
 import { v4 as uuid } from 'uuid'
+import fs from 'fs'
 
 const TMP = process.env.TMP_DIR || '/tmp'
 
+// Font paths — Poppins must be in /fonts relative to CWD
+function fontPath(variant: 'Bold' | 'SemiBold' | 'Regular') {
+  return path.join(process.cwd(), 'fonts', `Poppins-${variant}.ttf`)
+}
+
+function hasFonts(): boolean {
+  return fs.existsSync(fontPath('Bold'))
+}
+
 const SCALE_PAD =
   'scale=1080:1350:force_original_aspect_ratio=decrease,pad=1080:1350:(ow-iw)/2:(oh-ih)/2:color=black'
+
+const SCALE_PAD_916 =
+  'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920'
 
 // Build a 1080x1350 slideshow video from slide images (each shown perSlideSec).
 // Silent stereo audio track is added so IG accepts it as a Reel. Music can be
@@ -187,6 +200,63 @@ export function processVideo(inputPath: string, overlayPath?: string): Promise<s
     proc.stderr.on('data', d => stderr += d.toString())
     proc.on('close', code => {
       if (code !== 0) return reject(new Error(`FFmpeg failed: ${stderr.slice(-300)}`))
+      resolve(outputPath)
+    })
+  })
+}
+
+/**
+ * Convert a source video (YouTube/TikTok download) to a branded Reels MP4.
+ * Pipeline: scale to 9:16 (1080×1920) → add peacock lower-third with
+ * Beautifio branding (title, subtitle, handle, hashtag).
+ *
+ * If Poppins fonts are not available, skips text overlay and just rescales.
+ */
+export async function brandedReels(
+  inputPath: string,
+  opts: { title?: string; subtitle?: string; handle?: string; maxSec?: number } = {},
+): Promise<string> {
+  const { title, subtitle, handle = '@beautifio.space', maxSec = 90 } = opts
+  const outputPath = path.join(TMP, `reels-branded-${uuid()}.mp4`)
+  const boldFont   = path.join(process.cwd(), 'fonts', 'Poppins-Bold.ttf').replace(/\\/g, '/')
+  const semiFont   = path.join(process.cwd(), 'fonts', 'Poppins-SemiBold.ttf').replace(/\\/g, '/')
+  const regFont    = path.join(process.cwd(), 'fonts', 'Poppins-Regular.ttf').replace(/\\/g, '/')
+  const hasFonts   = fs.existsSync(path.join(process.cwd(), 'fonts', 'Poppins-Bold.ttf'))
+  const useFonts   = hasFonts && !!(title || subtitle)
+
+  const filters: string[] = [SCALE_PAD_916]
+
+  if (useFonts) {
+    filters.push(`drawbox=y=ih*0.68:w=iw:h=ih*0.32:color=#084463@0.75:t=fill`)
+    if (title) {
+      const t = title.replace(/'/g, "\\'").replace(/:/g, '\\:').slice(0, 60)
+      filters.push(`drawtext=fontfile='${boldFont}':text='${t}':fontcolor=#FFC64F:fontsize=52:x=(w-text_w)/2:y=h*0.72`)
+    }
+    if (subtitle) {
+      const s = subtitle.replace(/'/g, "\\'").replace(/:/g, '\\:').slice(0, 80)
+      filters.push(`drawtext=fontfile='${regFont}':text='${s}':fontcolor=#FFFFFF:fontsize=28:x=(w-text_w)/2:y=h*0.80`)
+    }
+    const h = handle.replace(/'/g, "\\'")
+    filters.push(`drawtext=fontfile='${regFont}':text='${h}':fontcolor=#647488:fontsize=24:x=(w-text_w)/2:y=h*0.89`)
+    filters.push(`drawtext=fontfile='${semiFont}':text='#curhatinaja':fontcolor=#FFC64F:fontsize=24:x=(w-text_w)/2:y=h*0.93`)
+  }
+
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-i', inputPath,
+      '-vf', filters.join(','),
+      '-t', String(maxSec),
+      '-c:v', 'libx264', '-crf', '23', '-preset', 'fast',
+      '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '128k',
+      '-movflags', '+faststart',
+      '-y', outputPath,
+    ]
+    const proc = spawn('ffmpeg', args)
+    let stderr = ''
+    proc.stderr.on('data', d => (stderr += d.toString()))
+    proc.on('close', code => {
+      if (code !== 0) return reject(new Error(`brandedReels failed: ${stderr.slice(-400)}`))
       resolve(outputPath)
     })
   })

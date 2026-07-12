@@ -3,12 +3,12 @@
 import { useState, useEffect, FormEvent, Suspense } from 'react'
 import Link from 'next/link'
 
-const L = '#CDF22B'
-const B = '#1E45FB'
-const G = '#888888'
-const W = '#e8e8ec'
-const D = '#111118'
-const S = '#1a1a26'
+const L = '#01C38D'
+const B = '#132D46'
+const G = '#696E79'
+const W = '#FFFFFF'
+const D = '#191E29'
+const S = '#132D46'
 
 function getUserFromCookie() {
   if (typeof document === 'undefined') return null
@@ -39,7 +39,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span style={{ fontSize: 11, color: W, fontWeight: 600 }}>{label}</span>
-      {hint ? <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{hint}</span> : null}
+      {hint ? <span style={{ fontSize: 10, color: G }}>{hint}</span> : null}
       {children}
     </label>
   )
@@ -125,7 +125,7 @@ function AdminForm() {
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Save failed')
-      setMsg('✓ Settings saved')
+      setMsg('✓ Tersimpan')
     } catch (e: any) {
       setMsg(e.message)
     } finally {
@@ -138,11 +138,9 @@ function AdminForm() {
   return (
     <div style={{ background: D, minHeight: '100vh', color: W, fontFamily: "'IBM Plex Mono','Courier New',monospace", position:'relative', zIndex:2 }}>
       <style>{`
-        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
         .pixel { font-family: 'Press Start 2P', monospace; letter-spacing:0; line-height:1.6; }
-        .blink { animation: blink 1.2s steps(1) infinite; }
         .abtn { transition: transform .06s ease, box-shadow .06s ease; }
-        .abtn:hover:not(:disabled) { transform: translate(-1px,-2px); box-shadow: 4px 4px 0 rgba(205,242,43,0.5); }
+        .abtn:hover:not(:disabled) { transform: translate(-1px,-2px); box-shadow: 4px 4px 0 rgba(1,195,141,0.5); }
         .abtn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 0px 0px 0 #000; }
         input,textarea { background:#111118; border:1px solid rgba(255,255,255,0.12); color:#e8e8ec; padding:12px 14px; border-radius:10px; font-size:14px; outline:none; font-family:'IBM Plex Mono',monospace; width:100%; box-sizing:border-box; }
         input:focus,textarea:focus { border-color:${L}; }
@@ -154,35 +152,31 @@ function AdminForm() {
           position: 'sticky', top: 0, zIndex: 20,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '12px 0',
-          background: 'rgba(250,250,248,0.94)',
+          background: 'rgba(25,30,41,0.94)',
           backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(0,0,0,0.08)',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span className="blink" style={{ width: 6, height: 6, background: L, display: 'inline-block' }} />
-            {brandLogoUrl ? <img src={brandLogoUrl} style={{height:24}} /> : <span className="pixel" style={{ fontSize: 10, color: L }}>publisio</span>}
-            <span style={{ fontSize: 9, color: G, marginLeft: 6 }}>TOKYO-01</span>
+            <span className="pixel" style={{ fontSize: 10, color: L }}>publisio</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <span style={{ fontSize: 9, color: G, fontFamily: "'IBM Plex Mono',monospace" }}>60 FPS</span>
-            <span className="pixel" style={{ fontSize: 7, color: G, border: `1px solid ${G}`, padding: '3px 7px' }}>v1.0</span>
             {user ? (
               <>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', fontFamily: "'IBM Plex Mono',monospace", maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 10, color: G, fontFamily: "'IBM Plex Mono',monospace", maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {user.email}
                 </span>
-                <Link href="/playground" className="pixel" style={{ fontSize: 7, color: L, textDecoration: 'none', border: `1px solid ${L}`, padding: '3px 7px' }}>BACK</Link>
-                <button onClick={signOutCookie} className="pixel" style={{ fontSize: 7, color: 'rgba(255,255,255,0.8)', background: 'transparent', border: '1px solid rgba(255,255,255,0.3)', padding: '3px 7px', cursor: 'pointer' }}>OUT</button>
+                <Link href="/playground" className="pixel" style={{ fontSize: 7, color: L, textDecoration: 'none', border: `1px solid ${L}`, padding: '3px 7px' }}>Kembali</Link>
+                <button onClick={signOutCookie} className="pixel" style={{ fontSize: 7, color: G, background: 'transparent', border: '1px solid rgba(255,255,255,0.3)', padding: '3px 7px', cursor: 'pointer' }}>Keluar</button>
               </>
             ) : (
-              <span className="pixel" style={{ fontSize: 7, color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.3)', padding: '3px 7px' }}>user</span>
+              <span className="pixel" style={{ fontSize: 7, color: G, border: '1px solid rgba(255,255,255,0.3)', padding: '3px 7px' }}>user</span>
             )}
           </div>
         </header>
 
         <main style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingTop: 40, paddingBottom: 60 }}>
           <div>
-            <h1 className="pixel" style={{ fontSize: 28, color: B, margin: 0, textShadow: '3px 3px 0 rgba(30,69,251,0.25)' }}>
+            <h1 className="pixel" style={{ fontSize: 28, color: L, margin: 0, textShadow: '3px 3px 0 rgba(1,195,141,0.25)' }}>
               DASHBOARD
             </h1>
             <p style={{ fontSize: 13, color: G, marginTop: 8, lineHeight: 1.6 }}>
@@ -191,7 +185,7 @@ function AdminForm() {
           </div>
 
           <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div style={{ background: B, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ background: S, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid rgba(255,255,255,0.12)', paddingBottom: 16 }}>
                 {TABS.map(t => (
                   <button
@@ -201,7 +195,7 @@ function AdminForm() {
                     className="pixel"
                     style={{
                       fontSize: 8,
-                      color: tab === t.id ? '#111118' : G,
+                      color: tab === t.id ? '#191E29' : G,
                       background: tab === t.id ? L : 'transparent',
                       border: `1px solid ${tab === t.id ? L : 'rgba(255,255,255,0.2)'}`,
                       borderRadius: 8,
@@ -282,7 +276,7 @@ function AdminForm() {
             </div>
 
             {msg ? (
-              <div style={{ fontSize: 13, color: msg.startsWith('✓') ? L : '#f87171', padding: '8px 12px', background: S, borderRadius: 8, border: `1px solid ${L}20` }}>
+              <div style={{ fontSize: 13, color: msg.startsWith('✓') ? L : '#ef4444', padding: '8px 12px', background: S, borderRadius: 8, border: `1px solid ${L}20` }}>
                 {msg}
               </div>
             ) : null}
@@ -290,15 +284,15 @@ function AdminForm() {
             <button type="submit" disabled={saving} className="pixel abtn" style={{
               minHeight: 48,
               background: L,
-              color: '#111118',
+              color: '#191E29',
               border: `2px solid ${L}`,
               borderRadius: 12,
               fontSize: 11,
               cursor: saving ? 'not-allowed' : 'pointer',
-              boxShadow: '4px 4px 0 rgba(205,242,43,0.3)',
+              boxShadow: '4px 4px 0 rgba(1,195,141,0.3)',
               opacity: saving ? 0.6 : 1,
             }}>
-              {saving ? 'SAVING...' : '▶ SAVE ALL'}
+              {saving ? 'MENYIMPAN...' : 'Simpan'}
             </button>
           </form>
 
@@ -335,7 +329,7 @@ function AdminForm() {
               cursor: 'pointer',
               boxShadow: 'none',
             }}>
-              📄 DOWNLOAD PROMPTS (.txt)
+              DOWNLOAD PROMPTS (.txt)
             </button>
           </div>
         </main>
@@ -346,7 +340,7 @@ function AdminForm() {
 
 export default function AdminPage() {
   return (
-    <Suspense fallback={<div style={{minHeight:'100vh',background:'#111118'}} />}>
+    <Suspense fallback={<div style={{minHeight:'100vh',background:'#191E29'}} />}>
       <AdminForm />
     </Suspense>
   )

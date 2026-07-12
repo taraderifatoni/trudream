@@ -15,10 +15,10 @@ function getKey(): string {
 }
 function rotateKey(): void { _currentKeyIndex++ }
 
-const STYLE = `Retro arcade / synthwave aesthetic. Pure black background. Neon lime green (#CDF22B) and electric blue (#1E45FB) glowing accents. 80s arcade cabinet vibe, subtle CRT scanlines, pixel-art / vaporwave energy, bold geometric neon shapes, high contrast glow. No text, no words, no letters, no UI elements. Vertical 4:5 portrait composition.`
+const STYLE = `Dark cinematic aesthetic. Deep navy (#191E29) background. Mint green (#01C38D) and dark teal (#132D46) accents. Clean, modern, atmospheric. Moody single-source lighting. High quality digital art. No text, no words, no letters, no UI elements. Vertical 4:5 portrait composition.`
 
-// For the cover slide — brighter, punchier arcade hero.
-const STYLE_VIVID = `Vivid retro arcade hero image, synthwave/vaporwave energy. Explosive neon lime green (#CDF22B) and electric blue (#1E45FB) glow on deep black, striking high-contrast lighting, glowing edges, 80s arcade cabinet / cyberpunk feel, eye-catching and bold. It should POP and stand out. No text, no words, no letters, no UI elements. Vertical 4:5 portrait composition.`
+// For the cover slide — brighter, punchier.
+const STYLE_VIVID = `Vivid dark cinematic hero image. Vibrant mint green (#01C38D) and dark teal (#132D46) accents on deep navy (#191E29) background. Striking high-contrast lighting, atmospheric and bold. It should POP and stand out. No text, no words, no letters, no UI elements. Vertical 4:5 portrait composition.`
 
 async function callWithRetry(url: string, init: RequestInit, maxRetries = 3): Promise<Response> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {

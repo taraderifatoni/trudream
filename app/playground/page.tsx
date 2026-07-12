@@ -819,6 +819,10 @@ export default function Page() {
 
   /* ============================ Render ============================ */
 
+  // Prevent hydration mismatch: render a blank shell on the server,
+  // full UI only after client mount (cookies, window, etc are available).
+  if (!mounted) return <div style={{ background: '#191E29', minHeight: '100vh' }} />
+
   return (
     <div
       style={{

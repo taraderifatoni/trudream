@@ -37,81 +37,42 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   throw new Error('Retry exhausted')
 }
 
-const PROMPT = `Kamu content creator Instagram profesional untuk akun berita/edukasi AI modern (teks tegas & informatif, visual sinematik).
-Analisis input (video/gambar/teks/link) dan buat data slide carousel.
+const PROMPT = `Kamu content creator Instagram profesional untuk akun media lifestyle wanita modern @beautifio.space.
 
-BAHASA: SEMUA teks yang dibaca manusia (tag, title, subtitle, bullets, stats.label, cards, quote, source, text, caption) WAJIB Bahasa Indonesia yang natural & catchy. HANYA "imagePrompt" yang ditulis dalam Bahasa Inggris (itu buat generator gambar).
-PENTING soal istilah: istilah teknis/jargon Inggris yang memang lazim dipakai apa adanya JANGAN diterjemahkan — biarkan dalam Bahasa Inggris. Contoh: developer, skill, framework, tools, prompt, deploy, startup, coding, dataset, machine learning, AI, model, open source, update, feature, dll. Nama produk/brand/orang JUGA jangan diterjemahkan. Tulis natural seperti orang Indonesia bidang tech ngobrol (boleh campur Indonesia-Inggris/Indonglish, jangan dipaksa jadi istilah Indonesia yang kaku, mis. JANGAN "pengembang" tapi "developer", JANGAN "keterampilan" tapi "skill", JANGAN "peranti" tapi "tools").
+Analisis input dan buat data slide carousel.
 
-AKURASI: Konten HARUS sesuai isi input yang sebenarnya — sebutkan fakta, nama, angka, istilah nyata dari input. JANGAN mengarang/generic.
-
-CRITICAL: Jawab HANYA raw JSON. Tanpa markdown, tanpa backtick, tanpa teks sebelum { atau sesudah }.
+BAHASA: Semua teks Bahasa Indonesia natural. Istilah Inggris lazim JANGAN diterjemahkan (AI, skincare, wellness, career, dll).
+AKURASI: Konten HARUS sesuai isi input. Jangan mengarang fakta.
+CRITICAL: Jawab HANYA raw JSON. Tanpa markdown, tanpa backtick.
 
 {
-  "tag": "Berita AI",
+  "tag": "Kategori",
   "slides": [
-    {
-      "type": "cover",
-      "tag": "Berita AI",
-      "title": "Judul hook maksimal 10 kata (Bahasa Indonesia)",
-      "subtitle": "Kalimat pendukung maksimal 15 kata",
-      "imagePrompt": "VIVID retro arcade / synthwave hero image of this exact topic. Neon lime green and electric blue glow on deep black, 80s arcade cabinet / cyberpunk energy, striking high-contrast glow, eye-catching, bold. Make it POP and stand out. NO text, NO words, NO letters, NO UI in image."
-    },
-    {
-      "type": "bullets",
-      "tag": "Apa yang terjadi",
-      "title": "Judul singkat",
-      "bullets": ["Poin satu", "Poin dua", "Poin tiga"],
-      "imagePrompt": "Retro arcade / synthwave visual related to the topic. Neon lime and electric blue glow on black, 80s arcade energy. NO text in image."
-    },
-    {
-      "type": "stat",
-      "tag": "Dalam angka",
-      "stats": [{"value": "87%", "label": "keterangan singkat"}],
-      "imagePrompt": "Abstract retro arcade visual, neon lime and electric blue glow on black, synthwave grid. NO text in image."
-    },
-    {
-      "type": "grid4",
-      "tag": "Kenapa penting",
-      "cards": [
-        {"num": "01", "title": "Singkat", "desc": "penjelasan ringkas"},
-        {"num": "02", "title": "Singkat", "desc": "penjelasan ringkas"},
-        {"num": "03", "title": "Singkat", "desc": "penjelasan ringkas"},
-        {"num": "04", "title": "Singkat", "desc": "penjelasan ringkas"}
-      ],
-      "imagePrompt": "Retro arcade dramatic visual, neon lime and electric blue glow on black, 80s cabinet vibe. NO text in image."
-    },
-    {
-      "type": "quote",
-      "tag": "Dari sumbernya",
-      "quote": "Kutipan nyata (terjemahkan ke Indonesia bila perlu)",
-      "source": "— Nama, Peran",
-      "imagePrompt": "Moody neon portrait lighting, lime green and electric blue rim light, deep black background, arcade/cyberpunk mood. NO text in image."
-    },
-    {
-      "type": "cta",
-      "tag": "Ikuti untuk update AI harian",
-      "text": "Kalimat penutup yang nendang (Bahasa Indonesia)",
-      "imagePrompt": "Abstract inspiring retro arcade visual, neon lime and electric blue glow on black, synthwave energy. NO text in image."
-    }
+    { "type": "cover", "title": "Hook maks 6 kata", "subtitle": "Pendukung maks 15 kata", "imagePrompt": "not needed" },
+    { "type": "profile", "tag": "Tag unik", "title": "Nama Lengkap", "bullets": ["Bio 15-25 kata informatif.", "Fakta menarik.", "Fun fact."], "imagePrompt": "not needed" },
+    { "type": "bullets", "title": "Judul maks 5 kata", "bullets": ["Poin 15-25 kata informatif."], "imagePrompt": "not needed" },
+    { "type": "stat", "stats": [{"value": "87%", "label": "keterangan"}], "imagePrompt": "not needed" },
+    { "type": "grid4", "cards": [{"num": "01", "title": "X", "desc": "10-15 kata"}], "imagePrompt": "not needed" },
+    { "type": "quote", "quote": "Kutipan minimal 15 kata.", "source": "— Nama, Jabatan", "imagePrompt": "not needed" },
+    { "type": "cta", "text": "Kalimat penutup inspiratif", "imagePrompt": "not needed" }
   ],
-  "videoCaption": "Keterangan ringkas untuk klip video, maksimal 10 kata (Bahasa Indonesia). Kosongkan '' jika input tidak mengandung video.",
-  "screenshotCaption": "Penjelasan singkat untuk gambar/screenshot yang diunggah user, maksimal 12 kata (Bahasa Indonesia). Kosongkan '' jika user tidak mengunggah gambar.",
-  "caption": "Caption Instagram Bahasa Indonesia. Hook. 3-4 poin inti. CTA. Maksimal 200 kata."
+  "videoCaption": "Keterangan ringkas video, maks 10 kata. Kosong jika tidak ada video.",
+  "screenshotCaption": "Penjelasan screenshot, maks 12 kata. Kosong jika tidak ada gambar.",
+  "caption": "Caption IG. Hook. 3-4 poin. CTA. Maks 200 kata."
 }
 
-Aturan:
-- 4 sampai 8 slide tergantung kekayaan konten
-- SELALU mulai dengan cover, SELALU akhiri dengan cta
-- Setiap slide WAJIB punya imagePrompt (dalam Bahasa Inggris)
-- slide "stat" hanya kalau ada angka nyata di input
-- Teks SINGKAT & padat, gaya Indonesia yang enak dibaca
-- imagePrompt harus mencerminkan topik SPESIFIK input, bukan arcade/neon generik
-- Slide cover: imagePrompt WAJIB cerah, neon, kontras tinggi, stunning & menonjol (JANGAN gelap/suram)
+ATURAN:
+- 4-10 slide. Cover pertama, CTA terakhir.
+- imagePrompt SELALU "not needed" — media dari sumber, bukan AI.
+- Bullet 15-25 kata informatif, BUKAN label pendek.
+- LISTICLE: 1 slide per orang/item, type "profile". Artikel 6 orang = 8 slide.
+- Title maks 5 kata. Stat hanya kalau ada angka nyata.
+
 CAPTION:
-- TANPA emoji sama sekali
-- Maksimal 5 hashtag, semua HURUF KECIL, ditaruh di akhir
-- JANGAN sebut/menyebut akun lain (mis. evolving.ai) atau sumber gaya apa pun`
+- TANPA emoji.
+- 5 hashtag huruf kecil. Pertama wajib #curhatinaja.
+- Setelah CTA tambahkan: "di sini, kita semua didengerin. Ruang Curhat 24/7"
+- JANGAN mention akun lain.`
 
 export async function analyzeContent(input: {
   text?: string
@@ -146,7 +107,17 @@ export async function analyzeContent(input: {
   const f = raw.indexOf('{'), l = raw.lastIndexOf('}')
   raw = raw.substring(f, l + 1)
 
-  const parsed = JSON.parse(raw)
+  let parsed: any
+  try {
+    parsed = JSON.parse(raw)
+  } catch (e: any) {
+    // Gemini sometimes returns malformed JSON — try to recover
+    console.error('Gemini JSON parse error:', e.message?.substring(0, 100))
+    // Fix common issues: unescaped newlines in strings
+    raw = raw.replace(/(?<=\": \")[^\"]*(?=\")/g, (m: string) => m.replace(/\n/g, ' ').replace(/"/g, '\\"'))
+    try { parsed = JSON.parse(raw) }
+    catch (e2) { throw new Error('Gemini returned unparseable JSON') }
+  }
   return {
     slides: stripMd(parsed.slides || []),
     caption: stripMd(parsed.caption || ''),
