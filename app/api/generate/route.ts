@@ -49,7 +49,19 @@ async function getPlatformPromptSettings(): Promise<Record<string, string | null
 
 async function getUserBrandSettings(req: NextRequest): Promise<Record<string, any>> {
   try {
-    const token = req.cookies.get('sb-access-token')?.value
+    let token = req.cookies.get('sb-access-token')?.value
+    // If access token absent, try server-side refresh
+    if (!token) {
+      const rt = req.cookies.get('sb-refresh-token')?.value
+      if (rt) {
+        const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+          method: 'POST',
+          headers: { apikey: SB_KEY!, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: rt }),
+        })
+        if (r.ok) { const d = await r.json(); token = d.access_token }
+      }
+    }
     if (!token) return {}
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
     const uid = payload.sub
@@ -281,27 +293,23 @@ CRITICAL INSTRUCTION — ASSET USAGE:
         for (let i = 0; i < analysis.slides.length; i++) {
           const slide: any = analysis.slides[i]
 
-          // Normalise: "not needed" imagePrompt → treat as no image needed (Media-First)
+          // Normalise: "not needed" imagePrompt → no AI image required (Media-First)
           if (slide.imagePrompt === 'not needed') slide.imagePrompt = ''
-
-          if (!slide.imagePrompt && !(slide.assetSource === 'original' && slide.originalAssetIndex !== undefined)) { slidesWithImages.push(slide); continue }
 
           const basePct = 20 + Math.round((i / total) * 60)
 
-          // Slide types that don't need AI background images — solid brand bg.
+          // Slide types that always use a solid brand bg — no image at all.
           const NO_IMAGE_TYPES = ['stat', 'grid4', 'quote', 'cta']
           if (NO_IMAGE_TYPES.includes(slide.type as string)) {
             send(controller, { type: 'step', step: 'images', pct: basePct, current: i + 1, total, label: `Slide ${i + 1}/${total} (solid bg)...` })
             try {
               const renderedPath = await renderSlide({ ...slide }, { index: i, total, handle, ...slideDesign })
               slidesWithImages.push({ ...slide, imagePath: renderedPath, imageUrl: await publishFile(renderedPath), assetSource: 'none' })
-            } catch {
-              slidesWithImages.push(slide)
-            }
+            } catch { slidesWithImages.push(slide) }
             continue
           }
 
-          // Source-first: use extracted asset if available
+          // Source asset available → use it (free, no API call).
           const slideWithAsset = slide.assetSource === 'original' && slide.originalAssetIndex !== undefined
             ? extractedAssets[slide.originalAssetIndex] : null
 
@@ -316,9 +324,9 @@ CRITICAL INSTRUCTION — ASSET USAGE:
             continue
           }
 
-          // Media-First: in source-first mode, if no source asset AND no imagePrompt → solid bg, no AI
-          if (contentMode === 'source-first' && !slideWithAsset && !slide.imagePrompt) {
-            send(controller, { type: 'step', step: 'images', pct: basePct, current: i + 1, total, label: `Slide ${i + 1}/${total} (solid bg)...` })
+          // No source asset. If no imagePrompt (Media-First / Source First mode) → solid bg render.
+          if (!slide.imagePrompt) {
+            send(controller, { type: 'step', step: 'images', pct: basePct, current: i + 1, total, label: `Slide ${i + 1}/${total}...` })
             try {
               const renderedPath = await renderSlide({ ...slide }, { index: i, total, handle, ...slideDesign })
               slidesWithImages.push({ ...slide, imagePath: renderedPath, imageUrl: await publishFile(renderedPath), assetSource: 'none' })
@@ -326,9 +334,8 @@ CRITICAL INSTRUCTION — ASSET USAGE:
             continue
           }
 
-          // Full AI mode: generate image via Gemini/DALL-E
+          // Full AI mode: imagePrompt exists → generate via Gemini/DALL-E.
           send(controller, { type: 'step', step: 'images', pct: basePct, current: i + 1, total, label: `Generating slide ${i + 1}/${total}...` })
-
           try {
             const fullImagePrompt = `${slide.imagePrompt}\n\n${ratioLabel}`
             const bgPath = await genImage(fullImagePrompt, { vivid: slide.type === 'cover', customStyle: platformSettings.image_style || undefined, customStyleVivid: platformSettings.image_style_vivid || undefined })

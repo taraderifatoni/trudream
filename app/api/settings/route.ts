@@ -8,20 +8,43 @@ function supabase() {
   return createClient(SB!, SK!, { auth: { persistSession: false, autoRefreshToken: false } })
 }
 
-// Decode Supabase JWT locally — no network call, never fails due to timeout.
-function getUserId(req: NextRequest): string | null {
+// Resolve user ID from request cookies.
+// 1. Try decoding sb-access-token (JWT, no network call).
+// 2. If absent/expired, try refreshing via sb-refresh-token (1 network call).
+async function getUserId(req: NextRequest): Promise<string | null> {
   const token = req.cookies.get('sb-access-token')?.value
-  if (!token) { console.log('[settings] no cookie'); return null }
-  try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
-    console.log('[settings] user found:', payload.sub)
-    return payload.sub ?? null
-  } catch (e) { console.log('[settings] jwt decode err:', e); return null }
+  if (token) {
+    try {
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
+      if (payload.sub) return payload.sub
+    } catch {}
+  }
+
+  // Fallback: server-side token refresh
+  const refreshToken = req.cookies.get('sb-refresh-token')?.value
+  if (refreshToken) {
+    try {
+      const r = await fetch(`${SB}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { apikey: SK!, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      })
+      if (r.ok) {
+        const d = await r.json()
+        if (d.access_token) {
+          const payload = JSON.parse(Buffer.from(d.access_token.split('.')[1], 'base64url').toString())
+          if (payload.sub) return payload.sub
+        }
+      }
+    } catch {}
+  }
+
+  return null
 }
 
 // GET — read user settings
 export async function GET(req: NextRequest) {
-  const uid = getUserId(req)
+  const uid = await getUserId(req)
   if (!uid) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { data, error } = await supabase().from('user_settings').select('*').eq('user_id', uid).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -46,7 +69,7 @@ export async function GET(req: NextRequest) {
 
 // POST — save user settings
 export async function POST(req: NextRequest) {
-  const uid = getUserId(req)
+  const uid = await getUserId(req)
   if (!uid) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
   const {
