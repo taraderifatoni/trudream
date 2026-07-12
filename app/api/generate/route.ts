@@ -310,9 +310,39 @@ CRITICAL INSTRUCTION — ASSET USAGE:
             continue
           }
 
-          // Source asset available → preprocess with sharp (position:north crop + auto-brightness) then render.
-          const slideWithAsset = slide.assetSource === 'original' && slide.originalAssetIndex !== undefined
+          // Source asset — use Gemini's explicit assignment, OR fall back to best
+          // available asset for slide types that benefit from a real photo.
+          // Cover always gets the first (og:image) asset if available.
+          // Profile slides get the asset that best matches the person name.
+          let slideWithAsset = slide.assetSource === 'original' && slide.originalAssetIndex !== undefined
             ? extractedAssets[slide.originalAssetIndex] : null
+
+          // Auto-assign fallback for cover: use og:image (index 0) if Gemini didn't assign one
+          if (!slideWithAsset && slide.type === 'cover' && extractedAssets.length > 0) {
+            const candidate = extractedAssets.find(a => a.localPath) || null
+            if (candidate) slideWithAsset = candidate
+          }
+
+          // Auto-assign fallback for profile: find asset whose context matches the person name
+          if (!slideWithAsset && slide.type === 'profile' && slide.title && extractedAssets.length > 0) {
+            const name = (slide.title as string).toLowerCase()
+            const nameMatch = extractedAssets.find(a =>
+              a.localPath && (
+                (a.context || '').toLowerCase().includes(name.split(' ')[0]) ||
+                (a.caption || '').toLowerCase().includes(name.split(' ')[0])
+              )
+            )
+            if (nameMatch) slideWithAsset = nameMatch
+            else {
+              // Last resort: use next unassigned asset in order
+              const usedIndices = new Set(
+                (analysis.slides as any[])
+                  .filter((s: any) => s.assetSource === 'original' && s.originalAssetIndex !== undefined)
+                  .map((s: any) => s.originalAssetIndex)
+              )
+              slideWithAsset = extractedAssets.find((a, idx) => a.localPath && !usedIndices.has(idx)) || null
+            }
+          }
 
           if (slideWithAsset?.localPath) {
             send(controller, { type: 'step', step: 'images', pct: basePct, current: i + 1, total, label: `Slide ${i + 1}/${total} (foto sumber)...` })
