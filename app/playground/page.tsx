@@ -596,13 +596,20 @@ export default function Page() {
       const v = textValue.trim();
       const body: { text?: string; url?: string; imageBase64?: string; imageMimeType?: string; contentMode?: string; aspectRatio?: string } = {};
 
-      const useAsUrl = isVideoPlatformUrl(v);
-      let textPayload = useAsUrl ? '' : v;
+      const isVideo = isVideoPlatformUrl(v);
+      const isArticle = !isVideo && isHttpUrl(v);
+
+      // Always send HTTP URLs as body.url so the backend can:
+      // - extract assets (og:image, article images) for article URLs
+      // - download video via yt-dlp for video URLs
+      if (isVideo || isArticle) body.url = v;
+
+      // For article URLs also send as text so Gemini receives it if scrape fails
+      let textPayload = isVideo ? '' : isArticle ? v : v;
       if (videoFile) {
         const note = `[uploaded video: ${videoFile.name}]`;
         textPayload = textPayload ? `${textPayload}\n${note}` : note;
       }
-      if (useAsUrl) body.url = v;
       if (textPayload) body.text = textPayload;
       if (imageFile) {
         const { base64, mime } = await fileToBase64(imageFile);
