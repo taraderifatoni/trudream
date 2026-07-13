@@ -169,8 +169,43 @@ export async function POST(req: NextRequest) {
         if (contentMode !== 'full-ai' && body.url) {
           send(controller, { type: 'step', step: 'extracting', pct: 7, label: 'Extracting assets...' })
           try { extractedAssets = await extractAssets(body.url) } catch(e) { console.error('Asset extraction failed:', e) }
+
+          // Last-resort: if no asset has a localPath, parse og:image directly and retry download
+          const hasLocalPath = extractedAssets.some(a => a.localPath)
+          if (!hasLocalPath && body.url) {
+            try {
+              const UA_HDR = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              const htmlRes = await fetch(body.url, {
+                headers: { 'User-Agent': UA_HDR, 'Accept': 'text/html', 'Referer': new URL(body.url).origin },
+                signal: AbortSignal.timeout(15000),
+              })
+              const html = await htmlRes.text()
+              const ogMatch = html.match(/property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+                || html.match(/content=["']([^"']+)["'][^>]*property=["']og:image["']/i)
+              if (ogMatch?.[1]) {
+                const imgUrl = new URL(ogMatch[1], body.url).href
+                const imgRes = await fetch(imgUrl, {
+                  headers: { 'User-Agent': UA_HDR, 'Referer': body.url, 'Accept': 'image/*' },
+                  signal: AbortSignal.timeout(20000),
+                })
+                if (imgRes.ok) {
+                  const buf = Buffer.from(await imgRes.arrayBuffer())
+                  if (buf.length > 2000) {
+                    const ct = imgRes.headers.get('content-type') || ''
+                    const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : 'jpg'
+                    const imgPath = path.join(TMP, `cover-fallback-${uuid()}.${ext}`)
+                    fs.writeFileSync(imgPath, buf)
+                    // Prepend as highest priority so cover picks it up
+                    extractedAssets.unshift({ type: 'image', url: imgUrl, localPath: imgPath, source: 'og:image', priority: 0 })
+                    console.log('[generate] Last-resort og:image saved:', imgPath)
+                  }
+                }
+              }
+            } catch(e) { console.error('[generate] Last-resort og:image failed:', e) }
+          }
+
           if (contentMode === 'source-first' && extractedAssets.length === 0) {
-            send(controller, { type: 'warning', message: 'Tidak ada gambar ditemukan di halaman ini. Menggunakan ilustrasi otomatis.' })
+            send(controller, { type: 'warning', message: 'Tidak ada gambar ditemukan di halaman ini.' })
           }
         }
 

@@ -66,32 +66,54 @@ export interface ExtractedAsset {
   priority: number
 }
 
-async function downloadImage(url: string): Promise<string | undefined> {
-  try {
-    const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15000) })
-    if (!res.ok) return
-    const ct = res.headers.get('content-type') || ''
-    if (!ct.startsWith('image/')) return
-    const buf = Buffer.from(await res.arrayBuffer())
-    if (buf.length < 3000) return // skip tiny/icons
-    const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : 'jpg'
-    const p = path.join(TMP, `asset-${uuid()}.${ext}`)
-    fs.writeFileSync(p, buf)
-    return p
-  } catch { return }
+async function downloadImage(url: string, referer?: string): Promise<string | undefined> {
+  const headers: Record<string, string> = {
+    'User-Agent': UA,
+    'Accept': 'image/webp,image/apng,image/jpeg,image/png,image/*,*/*;q=0.8',
+  }
+  if (referer) headers['Referer'] = referer
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers,
+        redirect: 'follow',
+        signal: AbortSignal.timeout(20000),
+      })
+      if (!res.ok) {
+        // On 403/429 with referer, try without on retry
+        if (attempt === 0 && referer) { delete headers['Referer']; continue }
+        return
+      }
+      const ct = res.headers.get('content-type') || ''
+      // Accept image/* or octet-stream (some CDNs serve images as binary)
+      const isImage = ct.startsWith('image/') || ct === 'application/octet-stream' || ct === 'binary/octet-stream'
+      if (!isImage && !url.match(/\.(jpe?g|png|webp|gif|avif)(\?|$)/i)) return
+      const buf = Buffer.from(await res.arrayBuffer())
+      if (buf.length < 2000) return // skip tiny icons (relaxed from 3000)
+      const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : 'jpg'
+      const p = path.join(TMP, `asset-${uuid()}.${ext}`)
+      fs.writeFileSync(p, buf)
+      return p
+    } catch { if (attempt === 0) continue; return }
+  }
 }
 
 /** Extract images + metadata from a web article */
 export async function extractFromWeb(url: string): Promise<ExtractedAsset[]> {
   const assets: ExtractedAsset[] = []
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(20000) })
+    const res = await fetch(url, {
+      headers: { 'User-Agent': UA, 'Accept': 'text/html,*/*', 'Referer': new URL(url).origin },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(20000),
+    })
     if (!res.ok) return assets
     const html = await res.text()
     const $ = cheerio.load(html)
     let priority = 1
 
-    // 1. og:image (highest priority)
+    // 1. og:image (highest priority) — downloaded with Referer = source URL
     const ogImg = $('meta[property="og:image"]').attr('content')
       || $('meta[property="og:image:url"]').attr('content')
       || $('meta[property="og:image:secure_url"]').attr('content')
@@ -99,7 +121,7 @@ export async function extractFromWeb(url: string): Promise<ExtractedAsset[]> {
       || $('meta[name="twitter:image:src"]').attr('content')
     if (ogImg) {
       const fullUrl = new URL(ogImg, url).href
-      const local = await downloadImage(fullUrl)
+      const local = await downloadImage(fullUrl, url)    // pass source URL as Referer
       assets.push({ type: 'image', url: fullUrl, localPath: local, caption: $('meta[property="og:title"]').attr('content') || undefined, source: 'og:image', priority: priority++ })
     }
 
@@ -191,10 +213,10 @@ export async function extractFromWeb(url: string): Promise<ExtractedAsset[]> {
       })
     }
 
-    // Download top assets
+    // Download top assets — pass source URL as Referer for CDN compatibility
     const topAssets = assets.filter(a => a.priority <= 8)
     for (const a of topAssets) {
-      if (!a.localPath) a.localPath = await downloadImage(a.url)
+      if (!a.localPath) a.localPath = await downloadImage(a.url, url)
     }
 
     // Fallback: if cheerio got ≤1 useful asset, try Puppeteer for SPA sites
@@ -209,7 +231,7 @@ export async function extractFromWeb(url: string): Promise<ExtractedAsset[]> {
           || $b('meta[name="twitter:image"]').attr('content')
         if (ogImgB && !assets.some(a => a.url === ogImgB)) {
           const fullUrl = new URL(ogImgB, url).href
-          const local = await downloadImage(fullUrl)
+          const local = await downloadImage(fullUrl, url)
           assets.push({ type: 'image', url: fullUrl, localPath: local, caption: $b('meta[property="og:title"]').attr('content') || undefined, source: 'og:image', priority: 1 })
         }
         // Extract article images from browser-rendered HTML
@@ -222,10 +244,10 @@ export async function extractFromWeb(url: string): Promise<ExtractedAsset[]> {
           const caption = $b(el).attr('alt') || ''
           assets.push({ type: 'image', url: fullUrl, caption, source: 'article-img', priority: priority++ })
         })
-        // Re-download top assets
+        // Re-download top assets with Referer
         const top2 = assets.filter(a => a.priority <= 6)
         for (const a of top2) {
-          if (!a.localPath) a.localPath = await downloadImage(a.url)
+          if (!a.localPath) a.localPath = await downloadImage(a.url, url)
         }
         console.log('[extractor] Puppeteer added', assets.length - usefulAssets.length, 'more assets')
       }
