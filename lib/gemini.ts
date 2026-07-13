@@ -48,13 +48,13 @@ CRITICAL: Jawab HANYA raw JSON. Tanpa markdown, tanpa backtick.
 {
   "tag": "Kategori",
   "slides": [
-    { "type": "cover", "title": "Hook maks 6 kata", "subtitle": "Pendukung maks 15 kata", "imagePrompt": "not needed" },
+    { "type": "cover", "title": "Hook **kata kunci** maks 6 kata", "subtitle": "Pendukung maks 15 kata", "imagePrompt": "not needed" },
     { "type": "profile", "tag": "Tag unik", "title": "Nama Lengkap", "bullets": ["Bio 15-25 kata informatif.", "Fakta menarik.", "Fun fact."], "imagePrompt": "not needed" },
-    { "type": "bullets", "title": "Judul maks 5 kata", "bullets": ["Poin 15-25 kata informatif."], "imagePrompt": "not needed" },
+    { "type": "bullets", "title": "Judul **kata kunci**", "bullets": ["Poin 15-25 kata informatif."], "imagePrompt": "not needed" },
     { "type": "stat", "stats": [{"value": "87%", "label": "keterangan"}], "imagePrompt": "not needed" },
     { "type": "grid4", "cards": [{"num": "01", "title": "X", "desc": "10-15 kata"}], "imagePrompt": "not needed" },
     { "type": "quote", "quote": "Kutipan minimal 15 kata.", "source": "— Nama, Jabatan", "imagePrompt": "not needed" },
-    { "type": "cta", "text": "Kalimat penutup inspiratif", "imagePrompt": "not needed" }
+    { "type": "cta", "text": "Kalimat penutup **kata kunci** inspiratif", "imagePrompt": "not needed" }
   ],
   "videoCaption": "Keterangan ringkas video, maks 10 kata. Kosong jika tidak ada video.",
   "screenshotCaption": "Penjelasan screenshot, maks 12 kata. Kosong jika tidak ada gambar.",
@@ -66,7 +66,16 @@ ATURAN:
 - imagePrompt SELALU "not needed" — media dari sumber, bukan AI.
 - Bullet 15-25 kata informatif, BUKAN label pendek.
 - LISTICLE: 1 slide per orang/item, type "profile". Artikel 6 orang = 8 slide.
-- Title maks 5 kata. Stat hanya kalau ada angka nyata.
+- Title maks 5-6 kata. Stat hanya kalau ada angka nyata.
+
+TYPOGRAPHY — WAJIB DIIKUTI:
+- Setiap "title" dan "text" (CTA) HARUS menggunakan **bold markers** untuk 1-2 kata kunci.
+- Format: **kata kunci** — tanda bintang ganda mengapit kata yang ingin di-highlight.
+- Contoh cover: "**Burnout** bukan kemalasan" atau "Cara kerja **otak perempuan**"
+- Contoh bullets: "**5 tanda** kamu kelelahan" atau "Mengapa **perempuan** lebih rentan"
+- Contoh cta: "Kamu tidak harus **kuat** sendirian" atau "**Cerita** dulu, baru sembuh"
+- JANGAN bold lebih dari 2 kata per title.
+- profile.title (nama orang) TIDAK perlu bold markers.
 
 CAPTION:
 - TANPA emoji.

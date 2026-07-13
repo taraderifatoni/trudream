@@ -494,14 +494,8 @@ async function renderL2CenterImg(ctx: SKRSContext2D, slide: SlideContent, dc: Sl
   const titleTopY = dc.logoUrl && dc.logoPosition !== 'none' ? 108 : 64
   const titleSize = hasManyBullets ? 44 : 52
 
-  // Title — centered, PEACOCK on white bg
-  const titleFit = fitText(ctx, slide.title || '', {
-    weight: WEIGHT.semibold, startSize: titleSize, minSize: 36,
-    maxWidth: contentW, maxHeight: splitY * 0.35, lineHeightRatio: 1.2, family: FONT
-  })
-  ctx.fillStyle = BEAUTIFIO.primary
-  ctx.font = font(WEIGHT.semibold, titleFit.size, FONT)
-  let y = drawLines(ctx, titleFit.lines, W / 2, titleTopY, titleFit.lineHeight, 'center') + 20
+  // Title — centered, mixed weight (peacock regular + saffron bold)
+  let y = drawMixedTitle(ctx, slide.title || '', W / 2, titleTopY, contentW, titleSize, false, 'center') + 20
 
   // Bullets (on white bg area)
   if (bullets.length) {
@@ -559,13 +553,9 @@ async function renderL3RightAligned(ctx: SKRSContext2D, slide: SlideContent, dc:
   const titleTopY = dc.logoUrl && dc.logoPosition !== 'none' ? 108 : 64
 
   // Title — right-aligned, PEACOCK
-  const titleFit = fitText(ctx, slide.title || '', {
-    weight: WEIGHT.bold, startSize: 52, minSize: 36,
-    maxWidth: contentW, maxHeight: 240, lineHeightRatio: 1.15, family: FONT
-  })
-  ctx.fillStyle = BEAUTIFIO.primary
-  ctx.font = font(WEIGHT.bold, titleFit.size, FONT)
-  let y = drawLines(ctx, titleFit.lines, textX, titleTopY, titleFit.lineHeight, 'right') + 24
+  // Title — right-aligned, mixed weight (peacock regular + saffron bold)
+  // drawMixedTitle supports 'left'/'center'; for right-align we mirror with left from textX - contentW
+  let y = drawMixedTitle(ctx, slide.title || '', textX - contentW, titleTopY, contentW, 52, false, 'left') + 24
 
   // Saffron accent line under title
   ctx.fillStyle = BEAUTIFIO.accent
@@ -627,14 +617,8 @@ async function renderL4TextHeavy(ctx: SKRSContext2D, slide: SlideContent, dc: Sl
   const contentW = W - PAD_X * 2
   const titleTopY = dc.logoUrl && dc.logoPosition !== 'none' ? 106 : 64
 
-  // Title — left, PEACOCK
-  const titleFit = fitText(ctx, slide.title || '', {
-    weight: WEIGHT.semibold, startSize: 50, minSize: 34,
-    maxWidth: contentW, maxHeight: 200, lineHeightRatio: 1.15, family: FONT
-  })
-  ctx.fillStyle = BEAUTIFIO.primary
-  ctx.font = font(WEIGHT.semibold, titleFit.size, FONT)
-  let y = drawLines(ctx, titleFit.lines, PAD_X, titleTopY, titleFit.lineHeight, 'left') + 20
+  // Title — left, mixed weight (peacock regular + saffron bold)
+  let y = drawMixedTitle(ctx, slide.title || '', PAD_X, titleTopY, contentW, 50, false, 'left') + 20
 
   // Bullets
   const maxY = img ? H - imgH - 16 : H - 80
@@ -679,12 +663,6 @@ async function renderL5TextOnly(ctx: SKRSContext2D, slide: SlideContent, dc: Sli
   const contentW = W - PAD_X * 2
   const titleTopY = dc.logoUrl && dc.logoPosition !== 'none' ? 108 : 70
 
-  // Measure total content height for vertical centering
-  const titleFit = fitText(ctx, slide.title || '', {
-    weight: WEIGHT.bold, startSize: 58, minSize: 38,
-    maxWidth: contentW, maxHeight: 300, lineHeightRatio: 1.2, family: FONT
-  })
-
   const bSize = bullets.length > 3 ? 26 : 29
   const bLH = bSize * 1.45
   let totalBH = 0
@@ -696,15 +674,18 @@ async function renderL5TextOnly(ctx: SKRSContext2D, slide: SlideContent, dc: Sli
     totalBH += lines.length * bLH + 10
   }
 
-  const titleH = titleFit.lines.length * titleFit.lineHeight
+  // For vertical centering, estimate title height using base size
+  const titleSizeL5 = 58
+  const titleLH = titleSizeL5 * 1.2
+  // rough line count estimate
+  const approxLines = Math.ceil((slide.title || '').length / 20)
+  const titleH = approxLines * titleLH
   const gap = 32
   const totalH = titleH + gap + totalBH
   const startY = Math.max(titleTopY, (H - totalH) / 2)
 
-  // Title — PEACOCK bold
-  ctx.fillStyle = BEAUTIFIO.primary
-  ctx.font = font(WEIGHT.bold, titleFit.size, FONT)
-  let y = drawLines(ctx, titleFit.lines, W / 2, startY, titleFit.lineHeight, 'center') + gap
+  // Title — mixed weight, centered (peacock regular + saffron bold)
+  let y = drawMixedTitle(ctx, slide.title || '', W / 2, startY, contentW, titleSizeL5, false, 'center') + gap
 
   // Bullets
   for (let i = 0; i < bulletLines.length; i++) {
