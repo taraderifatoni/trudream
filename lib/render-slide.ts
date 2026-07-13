@@ -309,6 +309,32 @@ async function drawLogoTopLeft(ctx: SKRSContext2D, dc: SlideDesignCtx) {
   } catch {}
 }
 
+/**
+ * Logo top-center, tinted to saffron or white — used on Cover and CTA slides.
+ * Size: 10% of slide height. Tinting uses source-atop compositing so the logo
+ * shape is preserved but filled with the tint color.
+ */
+async function drawLogoTopCenter(ctx: SKRSContext2D, dc: SlideDesignCtx, tintColor: string = BEAUTIFIO.accent) {
+  if (!dc.logoUrl || dc.logoPosition === 'none') return
+  try {
+    const img = await loadImage(dc.logoUrl)
+    const targetH = Math.round(dc.H * 0.10)          // 10% of slide height
+    const scale   = Math.min(targetH / img.height, (dc.W * 0.60) / img.width)
+    const lW = img.width * scale
+    const lH = img.height * scale
+    const x  = (dc.W - lW) / 2
+    const y  = 28                                     // near top
+
+    ctx.save()
+    ctx.drawImage(img, x, y, lW, lH)
+    // Tint: overlay fill in tintColor using source-atop (preserves logo alpha)
+    ctx.globalCompositeOperation = 'source-atop'
+    ctx.fillStyle = tintColor
+    ctx.fillRect(x, y, lW, lH)
+    ctx.restore()
+  } catch {}
+}
+
 /** Handle @beautifio.space always bottom-right */
 function drawHandle(ctx: SKRSContext2D, w: number, h: number, handle: string) {
   ctx.fillStyle = BEAUTIFIO.muted
@@ -403,13 +429,16 @@ async function renderL1Cover(ctx: SKRSContext2D, slide: SlideContent, dc: SlideD
   ctx.fillStyle = BEAUTIFIO.accent
   ctx.fillRect(W - 4, 0, 4, Math.round(H * 0.3))
 
-  // Logo top-left
-  await drawLogoTopLeft(ctx, dc)
+  // Logo top-center, saffron, 10% tinggi slide
+  await drawLogoTopCenter(ctx, dc, BEAUTIFIO.accent)
 
   // Title — top-left, mixed weight, large
   const titleSize = 68
   const titleMaxW = Math.round(W * 0.70)
-  const titleTopY = dc.logoUrl && dc.logoPosition !== 'none' ? 116 : 72
+  const logoReservedCover = dc.logoUrl && dc.logoPosition !== 'none'
+    ? Math.round(H * 0.10) + 28 + 28   // logo height + top pad + gap
+    : 72
+  const titleTopY = logoReservedCover
 
   const titleBottom = drawMixedTitle(ctx, slide.title || '', PAD_X, titleTopY, titleMaxW, titleSize, true, 'left')
 
@@ -882,26 +911,36 @@ async function renderL9CTA(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDes
   const W = dc.W, H = dc.H
   drawPeacockGradient(ctx, W, H)
 
+  // Logo top-center, putih, 10% tinggi slide
+  await drawLogoTopCenter(ctx, dc, BEAUTIFIO.white)
+
   const cx = W / 2
   const contentW = W - PAD_X * 2
 
+  // Reserve space for logo at top
+  const logoReservedCTA = dc.logoUrl && dc.logoPosition !== 'none'
+    ? Math.round(H * 0.10) + 28 + 32
+    : PAD_TOP
+
   const textFit = fitText(ctx, slide.text || '', {
     weight: WEIGHT.bold, startSize: 58, minSize: 40,
-    maxWidth: contentW, maxHeight: H * 0.38, lineHeightRatio: 1.2, family: FONT
+    maxWidth: contentW, maxHeight: H * 0.30, lineHeightRatio: 1.2, family: FONT
   })
 
   const handleSize = 28
-  const logoH = 56
   const hashSize = 28
   const taglineSize = 22
-  const lineGap = 44
+  const lineGap = 36
 
+  // Calculate total content height (no logo in middle anymore)
   const totalH = 4 + lineGap +
-    textFit.lines.length * textFit.lineHeight + 48 +
-    handleSize * 1.3 + 32 + logoH + 36 +
+    textFit.lines.length * textFit.lineHeight + 40 +
+    handleSize * 1.3 + 28 +
     hashSize * 1.2 + 8 + taglineSize * 1.2 * 2
 
-  let y = Math.max(PAD_TOP + 40, (H - totalH) / 2)
+  // Center content in remaining space below logo
+  const remaining = H - logoReservedCTA
+  let y = logoReservedCTA + Math.max(32, (remaining - totalH) / 2)
 
   // Saffron accent line
   ctx.strokeStyle = BEAUTIFIO.accent; ctx.lineWidth = 4
@@ -910,25 +949,14 @@ async function renderL9CTA(ctx: SKRSContext2D, slide: SlideContent, dc: SlideDes
 
   // CTA headline — mixed weight
   y = drawMixedTitle(ctx, slide.text || '', cx, y, contentW, textFit.size, true, 'center')
-  y += 48
+  y += 40
 
   // Follow handle
   ctx.fillStyle = BEAUTIFIO.white
   ctx.font = font(WEIGHT.semibold, handleSize, FONT)
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'
   ctx.fillText(`Follow ${handle || '@beautifio.space'}`, cx, y + handleSize * 0.85)
-  y += handleSize * 1.3 + 32
-
-  // Logo
-  if (dc.logoUrl && dc.logoPosition !== 'none') {
-    try {
-      const logo = await loadImage(dc.logoUrl)
-      const scale = Math.min(logoH / logo.height, 160 / logo.width)
-      const lW = logo.width * scale, lH = logo.height * scale
-      ctx.drawImage(logo, cx - lW / 2, y, lW, lH)
-      y += lH + 32
-    } catch { y += 36 }
-  }
+  y += handleSize * 1.3 + 28
 
   // #curhatinaja
   ctx.fillStyle = BEAUTIFIO.accent
