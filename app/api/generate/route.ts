@@ -135,6 +135,8 @@ export async function POST(req: NextRequest) {
         let videoDuration = 0
         let extraText = body.text || ''
         let uploadedImagePath: string | undefined
+        // extractedAssets initialised here so video thumbnail can be pushed before the extractor runs
+        let extractedAssets: Array<{type:string;url:string;localPath?:string;caption?:string;context?:string;source:string;priority:number}> = []
 
         if (body.imageBase64 && body.imageMimeType) {
           const ext = String(body.imageMimeType).includes('png') ? 'png' : String(body.imageMimeType).includes('webp') ? 'webp' : 'jpg'
@@ -147,14 +149,30 @@ export async function POST(req: NextRequest) {
           if (isVideoUrl(body.url)) {
             try {
               const dl = await downloadVideo(body.url)
-              videoPath = dl.filePath
-              videoDuration = dl.duration
-              extraText = `${extraText}\nVideo title: ${dl.title}`.trim()
-              gotVideo = true
+              // dl.filePath may be empty string if only thumbnail succeeded
+              if (dl.filePath && fs.existsSync(dl.filePath)) {
+                videoPath = dl.filePath
+                videoDuration = dl.duration
+                gotVideo = true
+              }
+              // Always use title + description for Gemini analysis
+              if (dl.title) extraText = `${extraText}\nVideo title: ${dl.title}`.trim()
+              if (dl.description) extraText = `${extraText}\nDescription: ${dl.description}`.trim()
+              // Thumbnail → add as priority cover asset
+              if (dl.thumbnailPath && fs.existsSync(dl.thumbnailPath)) {
+                extractedAssets.unshift({
+                  type: 'image',
+                  url: '',
+                  localPath: dl.thumbnailPath,
+                  caption: dl.title,
+                  source: 'video-thumbnail',
+                  priority: 0,
+                })
+              }
               try { const l = await fetchLinkContent(body.url); if (l.text) extraText = `${extraText}\n${l.text}`.trim() } catch {}
-            } catch {}
+            } catch (e) { console.error('[generate] video download error:', e) }
           }
-          if (!gotVideo) {
+          if (!gotVideo && !isVideoUrl(body.url)) {
             try {
               const l = await fetchLinkContent(body.url)
               if (l.title) extraText = `${extraText}\n${l.title}`.trim()
@@ -164,11 +182,13 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Asset extraction (source-first mode)
-        let extractedAssets: Array<{type:string;url:string;localPath?:string;caption?:string;context?:string;source:string;priority:number}> = []
-        if (contentMode !== 'full-ai' && body.url) {
+        // Asset extraction (source-first mode — merges with any assets already added above)
+        if (contentMode !== 'full-ai' && body.url && !isVideoUrl(body.url)) {
           send(controller, { type: 'step', step: 'extracting', pct: 7, label: 'Extracting assets...' })
-          try { extractedAssets = await extractAssets(body.url) } catch(e) { console.error('Asset extraction failed:', e) }
+          try {
+            const webAssets = await extractAssets(body.url)
+            extractedAssets.push(...webAssets)
+          } catch(e) { console.error('Asset extraction failed:', e) }
 
           // Last-resort: if no asset has a localPath, parse og:image directly and retry download
           const hasLocalPath = extractedAssets.some(a => a.localPath)
